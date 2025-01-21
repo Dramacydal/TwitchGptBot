@@ -1,0 +1,29 @@
+{
+  "admins": [ ],
+  "db": {
+    "twitch": {
+      "host": "127.0.0.1",
+      "port": 47306,
+      "user": "me",
+      "password": "",
+      "database": "twitch"
+    },
+    "gpt": {
+      "host": "127.0.0.1",
+      "port": 27306,
+      "user": "me",
+      "password": "",
+      "database": "gpt"
+    },
+    "mongo_gpt": {
+      "uri": "",
+      "database": "gpt"
+    }
+  },
+  "gpt_proxy": {
+    "url": "",
+    "user": "",
+    "password": ""
+  },
+  "streamlink": "streamlink"
+}
