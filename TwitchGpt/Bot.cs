@@ -85,9 +85,27 @@ public class Bot
             // InitializeClient(user);
         };
         _client.OnMessageReceived += async (sender, args) =>
-            await _messageHandler?.HandleMessage(args.ChatMessage, _gptHandler);
+        {
+            try
+            {
+                await _messageHandler?.HandleMessage(args.ChatMessage, _gptHandler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Uncaugh exception when handling chat message: {ex.GetType()}: {ex.Message}");
+            }
+        };
         _client.OnChatCommandReceived += async (sender, args) =>
-            await _messageHandler?.HandleCommand(args.Command, _gptHandler);
+        {
+            try
+            {
+                await _messageHandler?.HandleCommand(args.Command, _gptHandler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Uncaugh exception when handling command: {ex.GetType()}: {ex.Message}");
+            }
+        };
         _client.OnUnaccountedFor += async (sender, args) => Logger.Trace($"{currentClientCounter} Unaccounted For: {args.RawIRC}");
         _client.OnIncorrectLogin += (sender, args) =>
         {

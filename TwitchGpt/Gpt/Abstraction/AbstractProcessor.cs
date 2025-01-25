@@ -12,12 +12,9 @@ public abstract class AbstractProcessor
     {
         _bot = bot;
         _channelUser = channelUser;
-        LoadIgnoredUsers().Wait();
     }
     
     private DateTime _skipProcessingTime = DateTime.Now;
-    
-    protected List<string> _ignoredUsers;
     
     private readonly Bot _bot;
     
@@ -46,14 +43,8 @@ public abstract class AbstractProcessor
 
     protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
 
-    private async Task LoadIgnoredUsers()
-    {
-        _ignoredUsers = await IgnoredUsersMapper.Instance.GetIgnoredUsers();
-    }
-    
     public virtual void Reset()
     {
-        LoadIgnoredUsers();
     }
 
     private bool? _lastStatus = null;

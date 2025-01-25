@@ -17,13 +17,15 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
     private ConcurrentStack<ChatMessage> _messages = new();
     
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
+
+    public int ProcessPeriod { get; set; } = 25;
     
     public override async Task Run(CancellationToken token)
     {
         Logger.Info($"{nameof(GptMessagesProcessor)} started");
         for (; !token.IsCancellationRequested;)
         {
-            if (MessageHandler.IsSuspended)
+            if (MessageHandler.IsSuspended || ProcessPeriod <= 0)
             {
                 await Task.Delay(200);
                 continue;
@@ -38,16 +40,13 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
                 if (msg.Message.Length < 10)
                     continue;
 
-                if (_ignoredUsers.Contains(msg.UserId))
-                    continue;
-
                 messages.Add(msg);
                 ++i;
             }
 
             if (messages.Count == 0)
             {
-                DelayProcessing(TimeSpan.FromSeconds(10));
+                DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
                 continue;
             }
 
@@ -73,7 +72,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
 
                 Respond(res.Answer.Text);
                 
-                DelayProcessing(TimeSpan.FromSeconds(10));
+                DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
             }
             catch (SafetyException ex)
             {
