@@ -18,7 +18,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
     
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
-    public int ProcessPeriod { get; set; } = 25;
+    public int ProcessPeriod { get; set; } = 60;
     
     public override async Task Run(CancellationToken token)
     {

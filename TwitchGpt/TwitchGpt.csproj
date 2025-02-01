@@ -25,6 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\BoostyLib\BoostyLib.csproj" />
       <ProjectReference Include="..\..\GptLib\GptLib\GptLib.csproj" />
     </ItemGroup>
 

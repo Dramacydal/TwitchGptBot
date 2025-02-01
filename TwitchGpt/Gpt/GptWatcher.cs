@@ -19,86 +19,18 @@ public class GptWatcher(Bot bot, User channelUser)
         dialogueProcessor.Reset();
     }
 
-    private StreamInfo info = new();
+    private TwitchStreamInfo _twitchStream = new();
+
+    private BoostyStreamInfo _boostyStream = new();
 
     public async Task RunAsync(CancellationToken token)
     {
         var t1 = messagesProcessor.Run(token);
         var t2 = dialogueProcessor.Run(token);
 
-        var t3 = Task.Run(async () =>
-        {
-            var firstRun = true;
-            for (; !token.IsCancellationRequested;)
-            {
-                if (MessageHandler.IsSuspended)
-                {
-                    await Task.Delay(200);
-                    continue;
-                }
-                
-                try
-                {
-                    if (info.AvailableBttvEmotes == null)
-                    {
-                        try
-                        {
-                            info.AvailableBttvEmotes = await LoadBetterTtvEmotes();
-                        }
-                        catch (Exception ex)
-                        {
-                            this.Logger.Error($"Failed to load BTTV emote list: {ex.Message}");
-                        }
-                    }
-                    
-                    var streams =
-                        await bot.Api.Call(api => api.Helix.Streams.GetStreamsAsync(userLogins: [channelUser.Login]));
-                    if (streams.Streams.Length > 0)
-                    {
-                        info.Online = true;
-                        var stream = streams.Streams[0];
-                        info.Stream = stream;
+        var t3 = Task.Run(async () => await TwitchStreamChecker(token), token);
+        var t4 = Task.Run(async () => await BoostyStreamChecker(token), token);
 
-                        var uri = await StreamResolver.GetRmptUrl(channelUser.Login);
-                        if (string.IsNullOrEmpty(uri.ToString()))
-                            throw new Exception("Empty uri resolved");
-
-                        var res = await FFMpegHelper.SnapshotAsync(uri, "temp.png");
-                        if (!res)
-                            throw new Exception("Failed to snapshot");
-
-                        using var img = await Image.LoadAsync("temp.png");
-                        // img.Mutate(x => x.Resize(1280, 720));
-                        await img.SaveAsync("temp.jpg");
-
-                        info.Snapshot = "temp.jpg";
-
-                        info.NeedUpdate = true;
-                    }
-                    else
-                    {
-                        info.NeedUpdate = info.Online || firstRun;
-                        info.Online = false;
-                    }
-
-                    firstRun = false;
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Snapshot watcher task error: {ex.GetType()}: {ex.Message}");
-                }
-
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(25), token);
-                }
-                catch
-                {
-                    break;
-                }
-            }
-        }, token);
-        
         for (; !token.IsCancellationRequested;)
         {
             await ProcessInfo().ConfigureAwait(false);
@@ -106,9 +38,150 @@ public class GptWatcher(Bot bot, User channelUser)
             await Task.Delay(200);
         }
 
+        
         await t1;
         await t2;
         await t3;
+        await t4;
+    }
+
+    private async Task TwitchStreamChecker(CancellationToken token)
+    {
+        var firstRun = true;
+        for (; !token.IsCancellationRequested;)
+        {
+            if (MessageHandler.IsSuspended)
+            {
+                await Task.Delay(200);
+                continue;
+            }
+
+            try
+            {
+                if (_twitchStream.AvailableBttvEmotes == null)
+                {
+                    try
+                    {
+                        _twitchStream.AvailableBttvEmotes = await LoadBetterTtvEmotes();
+                    }
+                    catch (Exception ex)
+                    {
+                        this.Logger.Error($"Failed to load BTTV emote list: {ex.Message}");
+                    }
+                }
+
+                var streams = await bot.TwitchApi.Call(api =>
+                    api.Helix.Streams.GetStreamsAsync(userLogins: [channelUser.Login]));
+                if (streams.Streams.Length > 0)
+                {
+                    _twitchStream.Online = true;
+                    var stream = streams.Streams[0];
+                    _twitchStream.Stream = stream;
+
+                    var fileName = "temp_twitch.png";
+                    await SnapshotHelper.TakeTwitchSnapshot(channelUser.Login, fileName);
+
+                    using var img = await Image.LoadAsync(fileName);
+                    // img.Mutate(x => x.Resize(1280, 720));
+                    
+                    var jpgName = Path.ChangeExtension(fileName, "jpg");
+                    await img.SaveAsync(jpgName);
+
+                    _twitchStream.Snapshot = jpgName;
+
+                    _twitchStream.NeedUpdate = true;
+                }
+                else
+                {
+                    _twitchStream.NeedUpdate = _twitchStream.Online || firstRun;
+                    _twitchStream.Online = false;
+                }
+
+                firstRun = false;
+            }
+            catch (Exception ex)
+            {
+                _twitchStream.NeedUpdate = false;
+                Logger.Error($"Twitch snapshot watcher task error: {ex.GetType()}: {ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(25), token);
+            }
+            catch
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task BoostyStreamChecker(CancellationToken token)
+    {
+        if (bot.BoostyClient == null)
+            return;
+        
+        var firstRun = true;
+        for (; !token.IsCancellationRequested;)
+        {
+            if (MessageHandler.IsSuspended)
+            {
+                await Task.Delay(200);
+                continue;
+            }
+            
+            try
+            {
+                var stream = await bot.BoostyApi.Call(api => api.VideoStream.Get(bot.BoostyClient.ChannelName));
+                if (stream != null && stream.VideoStreamData.Count > 0)
+                {
+                    var playerData = stream.VideoStreamData[0].PlayerUrls.FirstOrDefault(p => p.Type == "live_hls");
+                    if (playerData == null || playerData.Url == null)
+                    {
+                        _boostyStream.NeedUpdate = _boostyStream.Online;
+                        _boostyStream.Online = false;
+                    }
+                    else
+                    {
+                        var fileName = "temp_boosty.png";
+                    
+                        await SnapshotHelper.TakeBoostySnapshot(playerData.Url, fileName);
+                        
+                        using var img = await Image.LoadAsync(fileName);
+                        // img.Mutate(x => x.Resize(1280, 720));
+
+                        var jpgName = Path.ChangeExtension(fileName, "jpg");
+                        await img.SaveAsync(jpgName);
+
+                        _boostyStream.Snapshot = jpgName;
+                        _boostyStream.Stream = stream;
+                        _boostyStream.Online = true;
+                        _boostyStream.NeedUpdate = true;
+                    }
+                }
+                else
+                {
+                    _boostyStream.NeedUpdate = _boostyStream.Online || firstRun;
+                    _boostyStream.Online = false;
+                }
+
+                firstRun = false;
+            }
+            catch (Exception ex)
+            {
+                _boostyStream.NeedUpdate = false;
+                Logger.Error($"Boosty snapshot watcher task error: {ex.GetType()}: {ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(25), token);
+            }
+            catch
+            {
+                break;
+            }
+        }
     }
 
     private async Task<List<string>?> LoadBetterTtvEmotes()
@@ -135,18 +208,34 @@ public class GptWatcher(Bot bot, User channelUser)
 
     private async Task ProcessInfo()
     {
+        if (MessageHandler.IsSuspended)
+            return;
+        
         try
         {
-            if (MessageHandler.IsSuspended)
-                return;
-            
-            if (!info.NeedUpdate)
-                return;
+            if (_twitchStream.NeedUpdate)
+            {
+                _twitchStream.NeedUpdate = false;
 
-            info.NeedUpdate = false;
+                await messagesProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
+                await dialogueProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"{ex.GetType()}: {ex.Message}");
+            return;
+        }
+        
+        try
+        {
+            if (_boostyStream.NeedUpdate)
+            {
+                _boostyStream.NeedUpdate = false;
 
-            await messagesProcessor.OnStreamInfo(info).ConfigureAwait(false);
-            await dialogueProcessor.OnStreamInfo(info).ConfigureAwait(false);
+                await messagesProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
+                await dialogueProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -154,6 +243,6 @@ public class GptWatcher(Bot bot, User channelUser)
             return;
         }
     }
-    
+
     protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
 }

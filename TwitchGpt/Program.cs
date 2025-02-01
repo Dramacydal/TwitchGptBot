@@ -1,30 +1,50 @@
 ﻿using System.Text.RegularExpressions;
+using BoostyLib;
 using TwitchGpt.Api;
+using TwitchGpt.Entities;
 
 namespace TwitchGpt;
 
 internal abstract class Program
 {
-    private static Dictionary<string, string> ExtractArgs(string[] args)
+    class RunParams
     {
-        Dictionary<string, string> ret = [];
-
-        foreach (var arg in args)
+        private Dictionary<string, string> _args = new();
+        
+        public RunParams(string[] args)
         {
-            var m = Regex.Match(arg, @"--([a-z0-9]+)=([a-z0-9]+)", RegexOptions.IgnoreCase);
-            if (!m.Success)
-                continue;
+            foreach (var arg in args)
+            {
+                var m = Regex.Match(arg, @"--([a-z0-9\-]+)=([a-z0-9]+)", RegexOptions.IgnoreCase);
+                if (!m.Success)
+                    continue;
 
-            ret[m.Groups[1].Value] = m.Groups[2].Value;
+                _args[m.Groups[1].Value] = m.Groups[2].Value;
+            }            
         }
 
-        return ret;
-    }
+        public bool TryGetString(string key, out string? value)
+        {
+            return _args.TryGetValue(key, out value);
+        }
 
+        public bool TryGetInt(string key, out int value)
+        {
+            value = 0;
+            return _args.TryGetValue(key, out var strVal) && int.TryParse(strVal, out value);
+        }
+        
+        public bool TryGetBool(string key, out bool value)
+        {
+            value = false;
+            return _args.TryGetValue(key, out var strVal) && bool.TryParse(strVal, out value);
+        }
+    }
+    
     public static async Task Main(string[] args)
     {
-        var namedArgs = ExtractArgs(args);
-        if (!namedArgs.TryGetValue("bot", out var strBot))
+        var namedArgs = new RunParams(args);
+        if (!namedArgs.TryGetString("bot", out var strBot))
         {
             Console.WriteLine("--bot argument is missing.");
             return;
@@ -36,22 +56,58 @@ internal abstract class Program
             return;
         }
 
-        if (!namedArgs.TryGetValue("channel", out var channel))
+        if (!namedArgs.TryGetInt("channel", out var channel))
         {
-            Console.WriteLine("--channel argument is missing.");
+            Console.WriteLine("--channel argument is missing or not an integer.");
             return;
         }
 
-        if (!int.TryParse(channel, out _))
+        var api = await CredentialsFactory.GetTwitchCredentials(botId);
+
+        var bot = new Bot(api, channel.ToString());
+
+        if (namedArgs.TryGetString("boosty-channel", out var boostyChannel) &&
+            namedArgs.TryGetString("boosty-api-name", out var boostyApiName))
         {
-            Console.WriteLine("--channel argument must be an integer.");
-            return;
+            BoostyApiCredentials? boostyApiCredentials;
+            try
+            {
+                boostyApiCredentials = await CredentialsFactory.GetBoostyCredentials(boostyApiName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return;
+            }
+
+            BoostyApiCredentials credentials = new()
+            {
+                AccessToken = boostyApiCredentials.AccessToken,
+                DeviceId = boostyApiCredentials.DeviceId,
+                ExpiresAt = boostyApiCredentials.ExpiresAt,
+                RefreshToken = boostyApiCredentials.RefreshToken,
+            };
+            
+            BoostyApi boostyApi = new(new()
+                {
+                    Credentials = new()
+                    {
+                        AccessToken = credentials.AccessToken,
+                        RefreshToken = credentials.RefreshToken,
+                        DeviceId = credentials.DeviceId,
+                        ExpiresAt = credentials.ExpiresAt,
+                    },
+                    Headers = new()
+                    {
+                        ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" 
+                    }
+                }
+            );
+
+            bot.BoostyApi = new BoostyApiCaller(credentials);
+            bot.BoostyClient = new StreamClient(boostyChannel, boostyApi);
         }
-
-        var api = await CredentialsFactory.GetByBotId(botId);
-
-        var bot = new Bot(api, channel);
-
+        
         Console.CancelKeyPress += (_, e) =>
         {
             Console.WriteLine("Ctrl+C received");
@@ -62,6 +118,14 @@ internal abstract class Program
         Console.WriteLine("Started");
 
         await bot.Start();
+
+        if (namedArgs.TryGetInt("watch", out var watchEnabled))
+            bot.SetWatchEnabled(watchEnabled > 0);
+        
+        if (namedArgs.TryGetInt("dialogs", out var dialogsEnabled))
+            bot.SetDialogsEnabled(dialogsEnabled > 0);
+        
+        await bot.WaitForCompletion();
 
         Console.WriteLine("Stopped");
     }

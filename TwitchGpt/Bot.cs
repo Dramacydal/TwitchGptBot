@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using BoostyLib;
 using NLog;
 using TwitchGpt.Api;
 using TwitchGpt.Entities;
@@ -16,28 +17,34 @@ public class Bot
     private MessageHandler? _messageHandler;
 
     private CancellationTokenSource cts = new();
-    private readonly ApiCredentials _credentials;
-    private readonly string _channelId1;
+    private readonly TwitchApiCredentials _credentials;
+    private readonly string _channelId;
     
     private GptWatcher _gptHandler;
 
-    public Bot(ApiCredentials credentials, string channelId)
+    public Bot(TwitchApiCredentials credentials, string channelId)
     {
         _credentials = credentials;
-        _channelId1 = channelId;
+        _channelId = channelId;
 
-        Api = new ApiCaller(credentials);
+        TwitchApi = new TwitchApiCaller(credentials);
     }
 
-    public ApiCaller Api { get; private set; }
+    public TwitchApiCaller TwitchApi { get; private set; }
+    
+    public BoostyApiCaller? BoostyApi { get; set; }
+    
+    public StreamClient? BoostyClient { get; set; }
 
     public TwitchClient Client => _client;
-    
+
+    private Task _gptTask;
+
     public async Task Start()
     {
-        var response = await Api.Call(api => api.Helix.Users.GetUsersAsync(ids: [_channelId1]));
+        var response = await TwitchApi.Call(api => api.Helix.Users.GetUsersAsync(ids: [_channelId]));
         if (response.Users.Length == 0)
-            throw new Exception($"User with id {_channelId1} not found");
+            throw new Exception($"User with id {_channelId} not found");
 
         var user = response.Users.First();
 
@@ -46,8 +53,13 @@ public class Bot
         _messageHandler = new MessageHandler(this, _credentials, user);
         
         InitializeClient(user);
-        
-        await _gptHandler.RunAsync(cts.Token);
+
+        _gptTask = _gptHandler.RunAsync(cts.Token);
+    }
+
+    public async Task WaitForCompletion()
+    {
+        await _gptTask;
     }
 
     private static int clientCounter = 0;
@@ -114,7 +126,6 @@ public class Bot
             
             Logger.Info(JsonSerializer.Serialize(_client.ConnectionCredentials));
             credenatialsProblem = true;
-
         };
         
         _client.Connect();
@@ -143,5 +154,15 @@ public class Bot
             return;
 
         _client.Disconnect();
+    }
+
+    public void SetWatchEnabled(bool on)
+    {
+        _messageHandler.SetWatchEnabled(on);
+    }
+    
+    public void SetDialogsEnabled(bool on)
+    {
+        _messageHandler.SetDialogsEnabled(on);
     }
 }

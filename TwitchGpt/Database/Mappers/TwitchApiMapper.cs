@@ -4,15 +4,15 @@ using TwitchGpt.Entities;
 
 namespace TwitchGpt.Database.Mappers;
 
-public class ApiPoolMapper : AbstractMapper<ApiPoolMapper, SqlConnection>
+public class TwitchApiMapper : AbstractMapper<TwitchApiMapper, SqlConnection>
 {
     public override SqlConnection Connection => SqlConnectionManager.GetConnection("twitch");
 
     public SqlConnection GetConnection() => Connection;
     
-    public async Task<ApiCredentials?> GetBotCredentials(int botId)
+    public async Task<TwitchApiCredentials?> GetBotCredentials(int botId)
     {
-        ApiCredentials? credentials = null;
+        TwitchApiCredentials? credentials = null;
 
         await Connection.Query("SELECT * FROM api_pool WHERE bot_id = ? AND enabled = 1", botId)
             .ExecuteReaderAsync(
@@ -30,7 +30,7 @@ public class ApiPoolMapper : AbstractMapper<ApiPoolMapper, SqlConnection>
                 });
 
         if (credentials == null)
-            throw new Exception($"Credentials for bot {botId} do not exist");
+            throw new Exception($"Credentials for bot {botId} do not exist or not enabled");
 
         return credentials;
     }

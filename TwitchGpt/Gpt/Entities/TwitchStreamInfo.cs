@@ -2,7 +2,7 @@
 
 namespace TwitchGpt.Gpt.Entities;
 
-public class StreamInfo
+public class TwitchStreamInfo
 {
     public bool Online { get; set; }
  

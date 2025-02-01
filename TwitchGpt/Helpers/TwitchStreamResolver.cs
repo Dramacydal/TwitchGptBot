@@ -3,7 +3,7 @@ using TwitchGpt.Config;
 
 namespace TwitchGpt.Helpers;
 
-public static class StreamResolver
+public static class TwitchStreamResolver
 {
     public static async Task<Uri> GetRmptUrl(string userName)
     {
@@ -16,7 +16,7 @@ public static class StreamResolver
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            Arguments = $"--stream-url twitch.tv/{userName}"
+            Arguments = $"--twitch-disable-ads --stream-url twitch.tv/{userName} best"
         };
 
         var tcs = new TaskCompletionSource<int>();

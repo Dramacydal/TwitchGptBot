@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace TwitchGpt.Entities;
 
-public class ApiCredentials : INotifyPropertyChanged
+public class TwitchApiCredentials : INotifyPropertyChanged
 {
     private string _apiUserName;
     

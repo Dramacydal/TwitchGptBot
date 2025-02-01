@@ -86,7 +86,7 @@ public class Client
             var res = await _client.AskQuestion(question, copy, _settings);
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
 
-            if (res != null && res.Success)
+            if (res.Success)
                 Conversation.History.Lock(h => h.Add([res.Question, res.Answer]));
 
             return res;

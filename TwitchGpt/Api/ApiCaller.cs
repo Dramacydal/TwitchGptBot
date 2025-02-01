@@ -1,45 +1,30 @@
-﻿using TwitchGpt.Entities;
-using TwitchLib.Api;
-using TwitchLib.Api.Core;
-using TwitchLib.Api.Core.Exceptions;
+﻿namespace TwitchGpt.Api;
 
-namespace TwitchGpt.Api;
-
-public class ApiCaller
+public abstract class ApiCaller<TApi>
 {
-    private TwitchAPI _api;
-    private readonly ApiCredentials _credentials;
-
-    public ApiCaller(ApiCredentials credentials)
-    {
-        _credentials = credentials;
-        _api = new TwitchAPI(settings: new ApiSettings()
-        {
-            ClientId = credentials.ClientId,
-            AccessToken = credentials.AccessToken,
-        });
-
-        credentials.PropertyChanged += (sender, args) =>
-        {
-            _api.Settings.ClientId = credentials.ClientId;
-            _api.Settings.AccessToken = credentials.AccessToken;
-        };
-    }
-
-    public async Task<T> Call<T>(Func<TwitchAPI, Task<T>> api)
+    public TApi Api { get; init; }
+    
+    public async Task<T> Call<T>(Func<TApi, Task<T>> api)
     {
         for (var i = 0; i < 3; ++i)
         {
             try
             {
-                return await api.Invoke(_api);
+                return await api.Invoke(Api);
             }
-            catch (BadScopeException ex)
+            catch (Exception ex)
             {
-                await CredentialsFactory.Reload(_credentials);
+                if (IsCredentialsException(ex))
+                    await ReloadCredentials();
+                else
+                    throw;
             }
         }
 
         throw new Exception("Api query failed after 3 tries");
     }
+    
+    protected abstract bool IsCredentialsException(Exception exception);
+
+    protected abstract Task ReloadCredentials();
 }

@@ -13,16 +13,18 @@ using TwitchLib.Client.Models;
 
 namespace TwitchGpt.Handlers;
 
-public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
+public class MessageHandler(Bot bot, TwitchApiCredentials credentials, User user)
 {
     private readonly ConcurrentDictionary<string, DateTime> _openDialogues = new();
-    
+
     private RoleModel _role = ModelFactory.Get("default").Result!;
 
     private readonly List<string> _admins = ConfigManager.GetPath<List<string>>("admins") ?? [];
 
-    private bool _globalChatEnabled;
-    
+    private bool _messageWatchEnabled = false;
+
+    private bool _dialogsEnabled = true;
+
     private List<string> _ignoredUsers = IgnoredUsersMapper.Instance.GetIgnoredUsers(user.Id).Result;
 
     public async Task HandleMessage(ChatMessage args, GptWatcher gptWatcher)
@@ -32,7 +34,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
 
         if (IsIgnoredUser(userId))
             return;
-        
+
         var replyToPos = msg.ToLower().IndexOf($"@{credentials.ApiUserName}".ToLower());
         if (replyToPos == 0)
         {
@@ -53,7 +55,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
         if (msg.StartsWith("!"))
             return;
 
-        if (_globalChatEnabled)
+        if (_messageWatchEnabled)
             gptWatcher.messagesProcessor.EnqueueChatMessage(args);
     }
 
@@ -105,6 +107,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
                     return;
 
                 gptWatcher.Reset();
+                Logger.Info("Everything reset");
                 break;
             }
             case "role":
@@ -132,6 +135,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
 
                 await ModelFactory.Reload();
                 _ignoredUsers = await IgnoredUsersMapper.Instance.GetIgnoredUsers(user.Id);
+                Logger.Info("Everything reloaded");
                 break;
             }
             case "safety":
@@ -148,7 +152,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
                 var userNameOrId = args.ArgumentsAsString;
                 if (string.IsNullOrEmpty(userNameOrId))
                     return;
-                
+
                 try
                 {
                     var user = await ResolveUser(userNameOrId);
@@ -169,11 +173,12 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
                 if (!IsAdmin(messageUserId))
                     return;
 
-                _globalChatEnabled = !_globalChatEnabled;
+                _messageWatchEnabled = !_messageWatchEnabled;
                 if (gptWatcher.messagesProcessor.ProcessPeriod <= 0)
                     gptWatcher.messagesProcessor.ProcessPeriod = 25;
-                
-                SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " + (_globalChatEnabled ? "ON" : "OFF"));
+
+                SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " +
+                            (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
             }
             case "watchperiod":
@@ -184,22 +189,32 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
                 if (string.IsNullOrEmpty(args.ArgumentsAsString) ||
                     !int.TryParse(args.ArgumentsAsString, out var period))
                 {
-                    SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " + (_globalChatEnabled ? "ON" : "OFF"));
+                    SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " +
+                                (_messageWatchEnabled ? "ON" : "OFF"));
                     return;
                 }
 
                 if (period == 0)
                 {
                     period = gptWatcher.messagesProcessor.ProcessPeriod;
-                    _globalChatEnabled = false;
+                    _messageWatchEnabled = false;
                 }
 
                 if (period < 10)
                     period = 10;
-                
+
                 gptWatcher.messagesProcessor.ProcessPeriod = period;
-                
-                SendMessage($"Реакция на чат каждые {period} сек " + (_globalChatEnabled ? "ON" : "OFF"));
+
+                SendMessage($"Реакция на чат каждые {period} сек " + (_messageWatchEnabled ? "ON" : "OFF"));
+                break;
+            }
+            case "toggledialog":
+            {
+                if (!IsAdmin(messageUserId))
+                    return;
+
+                _dialogsEnabled = !_dialogsEnabled;
+                SendMessage($"Диалоги " + (_dialogsEnabled ? "ON" : "OFF"));
                 break;
             }
             case "ignore":
@@ -256,9 +271,9 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
         GetUsersResponse? response;
 
         if (Regex.IsMatch(userNameOrId, "^[0-9]+$"))
-            response = await bot.Api.Call(api => api.Helix.Users.GetUsersAsync(ids: [userNameOrId]));
+            response = await bot.TwitchApi.Call(api => api.Helix.Users.GetUsersAsync(ids: [userNameOrId]));
         else if (Regex.IsMatch(userNameOrId, "^[a-z0-9_]+$", RegexOptions.IgnoreCase))
-            response = await bot.Api.Call(api => api.Helix.Users.GetUsersAsync(logins: [userNameOrId.ToLower()]));
+            response = await bot.TwitchApi.Call(api => api.Helix.Users.GetUsersAsync(logins: [userNameOrId.ToLower()]));
         else
             return null;
 
@@ -302,7 +317,7 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
 
         return false;
     }
-    
+
     private ILogger Logger => Logging.Logger.Instance(credentials.ApiUserName);
 
     private void SendReply(ChatMessage msg, string text)
@@ -355,4 +370,8 @@ public class MessageHandler(Bot bot, ApiCredentials credentials, User user)
 
         return _ignoredUsers.Contains(userId);
     }
+
+    public void SetWatchEnabled(bool on) => _messageWatchEnabled = on;
+    
+    public void SetDialogsEnabled(bool on) => _dialogsEnabled = on;
 }

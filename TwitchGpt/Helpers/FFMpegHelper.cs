@@ -15,7 +15,9 @@ public static class FFMpegHelper
         int inputFileIndex = 0,
         Codec? codec = null)
     {
-        (FFMpegArguments, Action<FFMpegArgumentOptions> outputOptions) tuple = BuildSnapshotArguments(input, await FFProbe.AnalyseAsync(input).ConfigureAwait(false), size, captureTime, streamIndex, inputFileIndex, codec);
+        var analyseResult = await FFProbe.AnalyseAsync(input).ConfigureAwait(false);
+        
+        (FFMpegArguments, Action<FFMpegArgumentOptions> outputOptions) tuple = BuildSnapshotArguments(input, analyseResult, size, captureTime, streamIndex, inputFileIndex, codec);
         
         return await tuple.Item1.OutputToFile(output, true, tuple.outputOptions).ProcessAsynchronously();
     }
