@@ -136,6 +136,7 @@ public class MessageHandler(Bot bot, TwitchApiCredentials credentials, User user
                 await ModelFactory.Reload();
                 _ignoredUsers = await IgnoredUsersMapper.Instance.GetIgnoredUsers(user.Id);
                 Logger.Info("Everything reloaded");
+                await bot.ReloadAnnouncements();
                 break;
             }
             case "safety":

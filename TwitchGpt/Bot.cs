@@ -5,6 +5,7 @@ using TwitchGpt.Api;
 using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
 using TwitchGpt.Handlers;
+using TwitchGpt.TwitchRoutines;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client;
 
@@ -21,6 +22,8 @@ public class Bot
     private readonly string _channelId;
     
     private GptWatcher _gptHandler;
+    
+    private Announcer _announcer;
 
     public Bot(TwitchApiCredentials credentials, string channelId)
     {
@@ -38,7 +41,8 @@ public class Bot
 
     public TwitchClient Client => _client;
 
-    private Task _gptTask;
+    private Task? _gptTask;
+    private Task? _announcerTask;
 
     public async Task Start()
     {
@@ -49,17 +53,22 @@ public class Bot
         var user = response.Users.First();
 
         _gptHandler = new GptWatcher(this, user);
+        _announcer = new Announcer(this, user);
 
         _messageHandler = new MessageHandler(this, _credentials, user);
-        
+
         InitializeClient(user);
 
         _gptTask = _gptHandler.RunAsync(cts.Token);
+        _announcerTask = _announcer.RunAsync(cts.Token);
     }
 
     public async Task WaitForCompletion()
     {
-        await _gptTask;
+        if (_gptTask != null)
+            await _gptTask;
+        if (_announcerTask != null)
+            await _announcerTask;
     }
 
     private static int clientCounter = 0;
@@ -164,5 +173,10 @@ public class Bot
     public void SetDialogsEnabled(bool on)
     {
         _messageHandler.SetDialogsEnabled(on);
+    }
+
+    public async Task ReloadAnnouncements()
+    {
+        await _announcer.Reload();
     }
 }

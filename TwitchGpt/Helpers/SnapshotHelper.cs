@@ -12,9 +12,13 @@ public static class SnapshotHelper
             $"streamlink --twitch-disable-ads https://www.twitch.tv/{channelName} best -O | ffmpeg -y -i pipe:0 -vframes 1 {outPath}");
     }
 
-    public static async Task TakeBoostySnapshot(Uri path, string outPath)
+    public static async Task TakeBoostySnapshot(Uri path, string outPath, Dictionary<string, string>? headers = null)
     {
-        await ExecuteCommand($"ffmpeg -y -i {path} -filter:v fps=4 -frames:v 1 {outPath}");
+        var strHeaders = "";
+        foreach (var (key, value) in headers ?? [])
+            strHeaders += $"-headers \"{key}: " + value.Replace("\"", "\\\"") + "\" ";
+
+        await ExecuteCommand($"ffmpeg -y {strHeaders} -i {path} -filter:v fps=4 -frames:v 1 {outPath}");
     }
 
     private static async Task ExecuteCommand(string command)

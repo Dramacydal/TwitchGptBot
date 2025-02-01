@@ -52,7 +52,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
 
             messages.Reverse();
 
-            var formatted = string.Join("\r\n", messages.Select(_ => $"[{_.Username}]: {_.Message}"));
+            var formatted = "Проанализируй лог чата:\r\n" + string.Join("\r\n", messages.Select(_ => $"[{_.Username}]: {_.Message}"));
 
             try
             {

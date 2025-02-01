@@ -12,8 +12,8 @@ namespace TwitchGpt.Gpt;
 
 public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor(bot, channelUser)
 {
-    protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatBot).Result;
-    // protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatWatcher).Result;
+    // protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatBot).Result;
+    protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatWatcher).Result;
     
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _messages = new();
     
@@ -45,8 +45,8 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
 
             try
             {
-                var res = await _gptClient.Ask(new() { Text = "~" + text }, role);
-                if (res == null || !res.Success)
+                var res = await _gptClient.Ask(new() { Text = $"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}" }, role);
+                if (!res.Success)
                 {
                     Logger.Error("Empty response or not a succes, requeueing");
                     if (res?.Success == false)

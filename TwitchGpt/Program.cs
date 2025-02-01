@@ -1,7 +1,10 @@
 ﻿using System.Text.RegularExpressions;
 using BoostyLib;
 using TwitchGpt.Api;
+using TwitchGpt.Database.Mappers;
 using TwitchGpt.Entities;
+using TwitchGpt.Gpt;
+using TwitchGpt.Gpt.Enums;
 
 namespace TwitchGpt;
 
@@ -80,22 +83,14 @@ internal abstract class Program
                 return;
             }
 
-            BoostyApiCredentials credentials = new()
-            {
-                AccessToken = boostyApiCredentials.AccessToken,
-                DeviceId = boostyApiCredentials.DeviceId,
-                ExpiresAt = boostyApiCredentials.ExpiresAt,
-                RefreshToken = boostyApiCredentials.RefreshToken,
-            };
-            
             BoostyApi boostyApi = new(new()
                 {
                     Credentials = new()
                     {
-                        AccessToken = credentials.AccessToken,
-                        RefreshToken = credentials.RefreshToken,
-                        DeviceId = credentials.DeviceId,
-                        ExpiresAt = credentials.ExpiresAt,
+                        AccessToken = boostyApiCredentials.AccessToken,
+                        RefreshToken = boostyApiCredentials.RefreshToken,
+                        DeviceId = boostyApiCredentials.DeviceId,
+                        ExpiresAt = boostyApiCredentials.ExpiresAt,
                     },
                     Headers = new()
                     {
@@ -104,7 +99,7 @@ internal abstract class Program
                 }
             );
 
-            bot.BoostyApi = new BoostyApiCaller(credentials);
+            bot.BoostyApi = new BoostyApiCaller(boostyApiCredentials);
             bot.BoostyClient = new StreamClient(boostyChannel, boostyApi);
         }
         

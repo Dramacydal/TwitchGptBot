@@ -78,16 +78,16 @@ public class GptWatcher(Bot bot, User channelUser)
                     var stream = streams.Streams[0];
                     _twitchStream.Stream = stream;
 
-                    var fileName = "temp_twitch.png";
+                    var fileName = "temp_twitch.jpg";
                     await SnapshotHelper.TakeTwitchSnapshot(channelUser.Login, fileName);
 
-                    using var img = await Image.LoadAsync(fileName);
+                    // using var img = await Image.LoadAsync(fileName);
                     // img.Mutate(x => x.Resize(1280, 720));
                     
-                    var jpgName = Path.ChangeExtension(fileName, "jpg");
-                    await img.SaveAsync(jpgName);
+                    // var jpgName = Path.ChangeExtension(fileName, "jpg");
+                    // await img.SaveAsync(jpgName);
 
-                    _twitchStream.Snapshot = jpgName;
+                    _twitchStream.Snapshot = fileName;
 
                     _twitchStream.NeedUpdate = true;
                 }
@@ -143,9 +143,12 @@ public class GptWatcher(Bot bot, User channelUser)
                     }
                     else
                     {
-                        var fileName = "temp_boosty.png";
+                        var fileName = "temp_boosty.jpg";
                     
-                        await SnapshotHelper.TakeBoostySnapshot(playerData.Url, fileName);
+                        await SnapshotHelper.TakeBoostySnapshot(playerData.Url, fileName, new()
+                        {
+                            ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                        });
                         
                         using var img = await Image.LoadAsync(fileName);
                         // img.Mutate(x => x.Resize(1280, 720));
@@ -218,7 +221,7 @@ public class GptWatcher(Bot bot, User channelUser)
                 _twitchStream.NeedUpdate = false;
 
                 await messagesProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
-                await dialogueProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
+                // await dialogueProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -234,7 +237,7 @@ public class GptWatcher(Bot bot, User channelUser)
                 _boostyStream.NeedUpdate = false;
 
                 await messagesProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
-                await dialogueProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
+                // await dialogueProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
