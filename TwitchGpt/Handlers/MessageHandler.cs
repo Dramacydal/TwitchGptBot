@@ -7,6 +7,7 @@ using TwitchGpt.Config;
 using TwitchGpt.Database.Mappers;
 using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
+using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -263,6 +264,23 @@ public class MessageHandler(Bot bot, TwitchApiCredentials credentials, User user
                 }
 
                 break;
+            }
+            case "snapshotcount":
+            {
+                if (!IsAdmin(messageUserId))
+                    return;
+
+                if (string.IsNullOrEmpty(args.ArgumentsAsString))
+                    SendMessage($"Количество: {AbstractProcessor.SnapshotHistoryCount}");
+                else if (uint.TryParse(args.ArgumentsAsString, out var value))
+                {
+                    AbstractProcessor.SnapshotHistoryCount = Math.Clamp(value, 1, 10);
+                    SendMessage($"Количество установлено в {AbstractProcessor.SnapshotHistoryCount}");
+                    return;
+                }
+                else
+                    SendMessage("Некорректный параметр");
+                return;
             }
         }
     }

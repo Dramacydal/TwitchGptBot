@@ -28,6 +28,8 @@ public abstract class AbstractProcessor
 
     public abstract Task Run(CancellationToken token);
 
+    public static uint SnapshotHistoryCount = 3;
+
     protected void SendMessage(string text)
     {
         try
@@ -100,7 +102,7 @@ public abstract class AbstractProcessor
 
             _gptClient.Conversation.History.Lock(h =>
             {
-                while (h.Contents.Count(e => e.Tag == "twitch_stream_info") > 3)
+                while (h.Contents.Count(e => e.Tag == "twitch_stream_info") > SnapshotHistoryCount)
                 {
                     var pos = h.Find(_ => _.Tag == "twitch_stream_info");
                     if (pos == -1)
@@ -167,7 +169,7 @@ public abstract class AbstractProcessor
 
             _gptClient.Conversation.History.Lock(h =>
             {
-                while (h.Contents.Count(e => e.Tag == "boosty_stream_info") > 3)
+                while (h.Contents.Count(e => e.Tag == "boosty_stream_info") > SnapshotHistoryCount)
                 {
                     var pos = h.Find(_ => _.Tag == "boosty_stream_info");
                     if (pos == -1)
