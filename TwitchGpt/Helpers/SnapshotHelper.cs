@@ -16,15 +16,18 @@ public static class SnapshotHelper
     {
         var strHeaders = "";
         foreach (var (key, value) in headers ?? [])
-            strHeaders += $"-headers \"{key}: " + value.Replace("\"", "\\\"") + "\" ";
+            strHeaders += $"-headers \"{key}: " + EscapeQuotes(value) + "\" ";
 
         await ExecuteCommand($"ffmpeg -y {strHeaders} -i {path} -filter:v fps=4 -frames:v 1 {outPath}");
     }
 
+    private static string EscapeQuotes(string str)
+    {
+        return str.Replace("\"", "\\\"");
+    }
+
     private static async Task ExecuteCommand(string command)
     {
-        var streamlink = ConfigManager.GetPath<string>("streamlink");
-
         var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         var info = new ProcessStartInfo()
@@ -39,7 +42,7 @@ public static class SnapshotHelper
         if (isWindows)
             info.Arguments = "-- eval '" + command + "'";
         else
-            info.Arguments = "-c \"" + command + "\"";
+            info.Arguments = "-c \"" + EscapeQuotes(command) + "\"";
         
         Console.WriteLine(info.Arguments);
 

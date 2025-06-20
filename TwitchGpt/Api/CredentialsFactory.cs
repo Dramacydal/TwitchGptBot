@@ -6,20 +6,36 @@ namespace TwitchGpt.Api;
 
 public static class CredentialsFactory
 {
-    private static ConcurrentDictionary<int, TwitchApiCredentials> _twitchCredentials = new();
+    private static ConcurrentDictionary<int, TwitchApiCredentials> _twitchBotCredentials = new();
+    
+    private static ConcurrentDictionary<string, TwitchApiCredentials> _twitchChannelCredentials = new();
     
     private static ConcurrentDictionary<string, BoostyApiCredentials> _boostyCredentials = new();
 
-    public static async Task<TwitchApiCredentials> GetTwitchCredentials(int botId)
+    public static async Task<TwitchApiCredentials?> GetTwitchBotCredentials(int botId)
     {
-        if (_twitchCredentials.TryGetValue(botId, out var credentials))
+        if (_twitchBotCredentials.TryGetValue(botId, out var credentials))
             return credentials;
 
         credentials = await TwitchApiMapper.Instance.GetBotCredentials(botId);
         if (credentials == null)
             return null;
 
-        _twitchCredentials[botId] = credentials;
+        _twitchBotCredentials[botId] = credentials;
+
+        return credentials;
+    }
+    
+    public static async Task<TwitchApiCredentials?> GetTwitchChannelCredentials(string channelId)
+    {
+        if (_twitchChannelCredentials.TryGetValue(channelId, out var credentials))
+            return credentials;
+
+        credentials = await TwitchApiMapper.Instance.GetChannelCredentials(channelId);
+        if (credentials == null)
+            return null;
+
+        _twitchChannelCredentials[channelId] = credentials;
 
         return credentials;
     }
@@ -40,7 +56,7 @@ public static class CredentialsFactory
 
     public static async Task<bool> Reload(TwitchApiCredentials credentials)
     {
-        var c = await TwitchApiMapper.Instance.GetBotCredentials(credentials.BotId);
+        var c = await TwitchApiMapper.Instance.GetChannelCredentials(credentials.ApiUserId);
         if (c == null)
             return false;
 

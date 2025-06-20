@@ -1,4 +1,5 @@
 ﻿using GptLib;
+using GptLib.Uploads;
 using MongoDB.Driver;
 using TwitchGpt.Database.Mappers.Abstraction;
 using TwitchGpt.Database.Mongo;
@@ -11,22 +12,18 @@ public class FileCacheMapper : AbstractMapper<FileCacheMapper, MongoConnection>
     public override MongoConnection Connection => MongoConnectionManager.GetClient("mongo_gpt");
     
     
-    public async Task SaveUploadedFile(UploadFileInfo file)
+    public async Task SaveUploadedFile(UploadFile file)
     {
-        var coll = Connection.GetCollection<UploadFileInfo>(_uploadedFilesCollectionName);
+        var coll = Connection.GetCollection<UploadFile>(_uploadedFilesCollectionName);
 
         await coll.InsertOneAsync(file);
     }
 
-    public async Task<UploadFileInfo> GetUploadedFile(UploadFileInfo file)
+    public async Task<UploadFile> GetUploadedFile(UploadFile file)
     {
-        var coll = Connection.GetCollection<UploadFileInfo>(_uploadedFilesCollectionName);
+        var coll = Connection.GetCollection<UploadFile>(_uploadedFilesCollectionName);
 
-        var res = await coll.FindAsync(e =>
-            e.FilePath == file.FilePath &&
-            e.ModifyDate == file.ModifyDate &&
-            e.Size == file.Size &&
-            e.ModifyDate > DateTime.Now);
+        var res = await coll.FindAsync(e => e.Equals(file));
 
         return res.FirstOrDefault();
     }

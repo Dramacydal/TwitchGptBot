@@ -30,8 +30,18 @@ public class Bot
         _credentials = credentials;
         _channelId = channelId;
 
-        TwitchApi = new TwitchApiCaller(credentials);
+        if (credentials.ApiUserId == channelId)
+            TwitchApi = new TwitchApiCaller(credentials);
+        else
+        {
+            var channelCredentials = CredentialsFactory.GetTwitchChannelCredentials(channelId).Result ?? credentials;
+            TwitchApi = new TwitchApiCaller(channelCredentials);
+        }
     }
+
+    public string BotUserId => _credentials.ApiUserId;
+    
+    public string BotUserName => _credentials.ApiUserName;
 
     public TwitchApiCaller TwitchApi { get; private set; }
     

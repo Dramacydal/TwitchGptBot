@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using GptLib.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
+using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 using TwitchGpt.Handlers;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
@@ -54,12 +55,13 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
 
             var formatted = "Проанализируй лог чата:\r\n" + string.Join("\r\n", messages.Select(_ => $"[{_.Username}]: {_.Message}"));
 
+            var currentProviderHash = _gptClient.ProviderHash;
             try
             {
                 _gptClient.Conversation.History.Lock(h =>
                 {
                     if (h.Length > 100)
-                        h.Reset();                    
+                        h.Reset();
                 });
 
                 var res = await _gptClient.Ask(new() { Text = formatted }, _gptClient.Role);
@@ -71,8 +73,14 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
                 Logger.Warn(res.Answer.Text);
 
                 Respond(res.Answer.Text);
-                
+
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
+            }
+            catch (TooManyRequestsException ex)
+            {
+                Logger.Error($"{ex.GetType()}: {ex.Message}");
+                Logger.Error(formatted);
+                _gptClient.RotateClient(currentProviderHash);
             }
             catch (SafetyException ex)
             {
@@ -90,44 +98,33 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
         Logger.Info($"{nameof(GptMessagesProcessor)} stopped");
     }
 
-    class LineData
-    {
-        public float Probability { get; set; }
-        public string UseName { get; set; }
-        public string Text { get; set; }
-    }
-
     private void Respond(string resText)
     {
         var lines = resText.Split("\n").Select(_ => _.Trim()).ToList();
 
-        List<LineData> parsed = new();
+        List<WeightedMessageData> parsed = new();
         foreach (var line in lines)
         {
-            var m = Regex.Match(line, @"\[(\d\.\d)\:([a-z0-9_]+)](.+)");
-            if (m.Success)
-            {
-                parsed.Add(new()
-                {
-                    Probability = float.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
-                    UseName = m.Groups[2].Value,
-                    Text = m.Groups[3].Value.Trim(' ', ':')
-                });
-            }
+            var lineData = WeightedMessageData.Extract(line);
+            if (lineData != null)
+                parsed.Add(lineData);
         }
 
         if (parsed.Count == 0)
             return;
 
         var selected = parsed.OrderByDescending(_ => _.Probability).FirstOrDefault(_ =>
-            _.UseName.Length > 0 && _.Text.Length > 0);
+            _.UserName.Length > 0 && _.Text.Length > 0);
 
         if (selected == null)
             return;
 
         var text = char.ToLower(selected.Text[0]) + selected.Text[1..];
 
-        SendMessage($"@{selected.UseName} {text}");
+        if (!text.ToLower().Contains($"@{selected.UserName.ToLower()}"))
+            text = $"@{selected.UserName} {text}";
+
+        SendMessage(text);
     }
 
     public override void Reset()

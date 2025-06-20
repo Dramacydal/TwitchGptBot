@@ -43,9 +43,11 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
 
             var (text, chatMessage, role) = payload;
 
+            var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                var res = await _gptClient.Ask(new() { Text = $"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}" }, role);
+                var res = await _gptClient.Ask(
+                    new() { Text = $"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}" }, role);
                 if (!res.Success)
                 {
                     Logger.Error("Empty response or not a succes, requeueing");
@@ -54,7 +56,21 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
                     _messages.Enqueue(payload);
                 }
 
-                SendMessage($"@{chatMessage.Username} {res.Answer.Text}");
+                var responseText = res.Answer.Text;
+                var data = WeightedMessageData.Extract(responseText);
+                if (data != null)
+                    responseText = data.Text;
+
+                if (!responseText.ToLower().Contains($"@{chatMessage.Username.ToLower()}"))
+                    responseText = $"@{chatMessage.Username} {responseText}";
+
+                SendMessage(responseText);
+            }
+            catch (TooManyRequestsException ex)
+            {
+                Logger.Error($"{ex.GetType()}: {ex.Message}");
+                _gptClient.RotateClient(currentProviderHash);
+                _messages.Enqueue(payload);
             }
             catch (ClientBusyException ex)
             {

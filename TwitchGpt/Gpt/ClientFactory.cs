@@ -23,7 +23,7 @@ public static class ClientFactory
         if (clients.TryGetValue(type, out var client))
             return client;
 
-        client = new Client(type, geminiTokens[new Random().Next(0, geminiTokens.Count - 1)]);
+        client = new Client(type, geminiTokens);
         clients[type] = client;
 
         if (type == ClientType.ChatWatcher)

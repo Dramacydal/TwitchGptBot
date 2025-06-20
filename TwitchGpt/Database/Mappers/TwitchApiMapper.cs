@@ -29,8 +29,27 @@ public class TwitchApiMapper : AbstractMapper<TwitchApiMapper, SqlConnection>
                     };
                 });
 
-        if (credentials == null)
-            throw new Exception($"Credentials for bot {botId} do not exist or not enabled");
+        return credentials;
+    }
+    
+    public async Task<TwitchApiCredentials?> GetChannelCredentials(string channelId)
+    {
+        TwitchApiCredentials? credentials = null;
+
+        await Connection.Query("SELECT * FROM api_pool WHERE api_user_id = ? AND enabled = 1", channelId)
+            .ExecuteReaderAsync(
+                reader =>
+                {
+                    credentials = new()
+                    {
+                        BotId = reader.GetInt32("bot_id"),
+                        ApiUserName = reader.GetString("api_user_name"),
+                        ApiUserId = reader.GetString("api_user_id"),
+                        ClientId = reader.GetString("client_id"),
+                        Secret = reader.GetString("secret"),
+                        AccessToken = reader.GetString("access_token"),
+                    };
+                });
 
         return credentials;
     }

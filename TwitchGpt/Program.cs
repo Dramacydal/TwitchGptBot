@@ -65,7 +65,7 @@ internal abstract class Program
             return;
         }
 
-        var api = await CredentialsFactory.GetTwitchCredentials(botId);
+        var api = await CredentialsFactory.GetTwitchBotCredentials(botId);
 
         var bot = new Bot(api, channel.ToString());
 

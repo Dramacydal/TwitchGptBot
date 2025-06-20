@@ -1,4 +1,5 @@
 ﻿using GptLib;
+using GptLib.Uploads;
 using NLog;
 using TwitchGpt.Database.Mappers;
 using TwitchGpt.Gpt.Entities;
@@ -86,7 +87,7 @@ public abstract class AbstractProcessor
             if (!string.IsNullOrEmpty(info.Snapshot))
                 msg.Text +=
                     "Кадр стрима на Twitch на текущий момент, по которому ты можешь определить, что на нем происходит, прикрепляю файлом";
-            msg.Files.Add(info.Snapshot);
+            msg.Files.Add(FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot), await File.ReadAllBytesAsync(info.Snapshot)));
         }
         else
             msg.Text =
@@ -154,7 +155,7 @@ public abstract class AbstractProcessor
             if (!string.IsNullOrEmpty(info.Snapshot))
                 msg.Text +=
                     "Кадр стрима на Бусти текущий момент, по которому ты можешь определить, что на нем происходит, прикрепляю файлом";
-            msg.Files.Add(info.Snapshot);
+            msg.Files.Add(FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot), await File.ReadAllBytesAsync(info.Snapshot)));
         }
         else
             msg.Text =

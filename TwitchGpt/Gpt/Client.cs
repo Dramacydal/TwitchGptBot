@@ -11,8 +11,10 @@ namespace TwitchGpt.Gpt;
 
 public class Client
 {
-    private readonly GptClient _client;
+    private readonly List<GptClient> _clientPool = new();
 
+    private int _clientIndex = 0;
+    
     private readonly Settings _settings;
 
     public RoleModel? Role { get; set; }
@@ -22,6 +24,8 @@ public class Client
     public bool IsBusy { get; set; }
 
     public Conversation Conversation { get; set; }
+
+    public string ProviderHash => GetClient().ProviderHash;
 
     private IWebProxy? GetProxy()
     {
@@ -44,7 +48,22 @@ public class Client
         }
     }
 
-    public Client(ClientType type, string token, RoleModel? role = null)
+    private GptClient GetClient()
+    {
+        return _clientPool[_clientIndex];
+    }
+
+    public void RotateClient(string excludeHash = "")
+    {
+        if (_clientPool.Count == 0)
+            return;
+        
+        _clientIndex = Math.Clamp(++_clientIndex, 0, _clientPool.Count - 1);
+        if (excludeHash != "" && ProviderHash == excludeHash)
+            RotateClient();
+    }
+
+    public Client(ClientType type, IEnumerable<string> tokenPool, RoleModel? role = null)
     {
         ClientType = type;
 
@@ -52,22 +71,24 @@ public class Client
         
         Role = role ?? ClientFactory.DefaultRole;
 
-        
-        _client = new GptClient(type.ToString(), new MongoCache())
+        foreach (var token in tokenPool)
         {
-            Provider = new GoogleGeminiProvider(token),
-            ModelName = GoogleGeminiProvider.ModelGemini20FlashExp,
-            // Model = GoogleGeminiProvider.ModelGemini15Flash,
-            Proxy = GetProxy(),
-        };
-        
+            _clientPool.Add(new GptClient(type.ToString(), new MongoCache())
+            {
+                Provider = new GoogleGeminiProvider(token),
+                // ModelName = GoogleGeminiProvider.ModelGemini20FlashLite,
+                ModelName = GoogleGeminiProvider.ModelGemini20FlashLite,
+                Proxy = GetProxy(),
+            });
+        }
+
         _settings = new Settings();
         _settings.Instructions = Role.Instructions.Where(_ => !_.StartsWith("#")).ToList();
 
         _settings.ResponseMimeType = "text/plain";
     }
     
-    public async Task<GptResponse?> Ask(GptQuestion question, RoleModel model)
+    public async Task<GptResponse> Ask(GptQuestion question, RoleModel model)
     {
         // if (!await WaitHelper.WaitUntil(() => !IsBusy, TimeSpan.FromSeconds(2)))
         //     throw new ClientBusyException();
@@ -83,7 +104,7 @@ public class Client
         {
             var copy = Conversation.History.Lock(h => h.Copy());
                 
-            var res = await _client.AskQuestion(question, copy, _settings);
+            var res = await GetClient().AskQuestion(question, copy, _settings);
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
 
             if (res.Success)
