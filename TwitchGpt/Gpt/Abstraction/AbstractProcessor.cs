@@ -1,7 +1,7 @@
 ﻿using GptLib;
+using GptLib.Exceptions;
 using GptLib.Uploads;
 using NLog;
-using TwitchGpt.Database.Mappers;
 using TwitchGpt.Gpt.Entities;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 
@@ -94,6 +94,7 @@ public abstract class AbstractProcessor
                 "Стрим на Twitch сейчас оффлайн. Ты не можешь по нему дать информацию, и сказать, что сейчас на экране.\r\n" +
                 emoteLine;
 
+        var currentProviderHash = _gptClient.ProviderHash;
         try
         {
             if (GetType().Name == nameof(GptMessagesProcessor))
@@ -121,6 +122,11 @@ public abstract class AbstractProcessor
                 throw new Exception("Not a success");
 
             Logger.Info("Response: " + res.Answer.Text);
+        }
+        catch (TooManyRequestsException ex)
+        {
+            Logger.Warn("Quota limit exceeded while processing twitch snapshot");
+            _gptClient.RotateClient(currentProviderHash);
         }
         catch (Exception ex)
         {
@@ -161,6 +167,7 @@ public abstract class AbstractProcessor
             msg.Text =
                 "Стрим на Бусти сейчас оффлайн. Ты не можешь по нему дать информацию, и сказать, что сейчас на экране.\r\n";
 
+        var currentProviderHash = _gptClient.ProviderHash;
         try
         {
             if (GetType().Name == nameof(GptMessagesProcessor))
@@ -188,6 +195,11 @@ public abstract class AbstractProcessor
                 throw new Exception("Not a success");
 
             Logger.Info("Response: " + res.Answer.Text);
+        }
+        catch (TooManyRequestsException ex)
+        {
+            Logger.Warn("Quota limit exceeded while processing boosty snapshot");
+            _gptClient.RotateClient(currentProviderHash);
         }
         catch (Exception ex)
         {

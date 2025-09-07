@@ -77,7 +77,7 @@ public class Client
             {
                 Provider = new GoogleGeminiProvider(token),
                 // ModelName = GoogleGeminiProvider.ModelGemini20FlashLite,
-                ModelName = GoogleGeminiProvider.ModelGemini20FlashLite,
+                ModelName = GoogleGeminiProvider.ModelGemini25FlashLitePreview0617,
                 Proxy = GetProxy(),
             });
         }

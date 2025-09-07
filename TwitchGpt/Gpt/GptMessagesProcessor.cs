@@ -1,6 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Globalization;
-using System.Text.RegularExpressions;
 using GptLib.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
@@ -20,6 +18,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
     public int ProcessPeriod { get; set; } = 60;
+    // public int ProcessPeriod { get; set; } = 10;
     
     public override async Task Run(CancellationToken token)
     {
