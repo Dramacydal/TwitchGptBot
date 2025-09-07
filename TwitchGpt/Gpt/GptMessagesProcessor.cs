@@ -1,9 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using GptLib.Exceptions;
+using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 using TwitchGpt.Handlers;
+using TwitchGpt.Helpers;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
 
@@ -57,21 +58,16 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
             var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                _gptClient.Conversation.History.Lock(h =>
-                {
-                    if (h.Length > 100)
-                        h.Reset();
-                });
+                if (_gptClient.HistoryHolder.Count() > 100)
+                    _gptClient.HistoryHolder.Reset();
 
-                var res = await _gptClient.Ask(new() { Text = formatted }, _gptClient.Role);
-                if (res == null || !res.Success)
-                    throw new Exception("Client responded with null or error");
+                var res = await _gptClient.Ask(formatted);
 
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
-                Logger.Warn(res.Answer.Text);
+                Logger.Warn(res);
 
-                Respond(res.Answer.Text);
+                Respond(res);
 
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
             }
@@ -81,9 +77,22 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
                 Logger.Error(formatted);
                 _gptClient.RotateClient(currentProviderHash);
             }
+            catch (ClientBusyException ex)
+            {
+                Logger.Error($"{ex.GetType()}: {ex.Message}");
+                Logger.Error(formatted);
+            }
+            catch (UnavailableException ex)
+            {
+                Logger.Warn($"{ex.GetType()}: {ex.Message}");
+                DelayProcessing(TimeSpan.FromMilliseconds(2500));
+            }
+            catch (UnknownGeminiException ex)
+            {
+                Logger.Warn($"{ex.GetType()}: {ex.Message}");
+            }
             catch (SafetyException ex)
             {
-                _gptClient.Conversation.History.Lock(h => h.RollbackLastQuestion());
                 Logger.Error($"{ex.GetType()}: {ex.Message}");
                 Logger.Error(formatted);
             }
@@ -91,7 +100,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
             {
                 Logger.Error($"{ex.GetType()}: {ex.Message}");
                 Logger.Error(formatted);
-                DelayProcessing(TimeSpan.FromSeconds(10));
+                DelayProcessing(TimeSpan.FromMilliseconds(500));
             }
         }
         Logger.Info($"{nameof(GptMessagesProcessor)} stopped");
@@ -112,14 +121,13 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
         if (parsed.Count == 0)
             return;
 
-        var selected = parsed.OrderByDescending(_ => _.Probability).FirstOrDefault(_ =>
-            _.UserName.Length > 0 && _.Text.Length > 0);
+        var selected = parsed.Where(_ =>
+            _.UserName.Length > 0 && _.Text.Length > 0).Random();
 
         if (selected == null)
             return;
 
-        var text = char.ToLower(selected.Text[0]) + selected.Text[1..];
-
+        var text = selected.Text;
         if (!text.ToLower().Contains($"@{selected.UserName.ToLower()}"))
             text = $"@{selected.UserName} {text}";
 
@@ -128,10 +136,11 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
 
     public override void Reset()
     {
-        DelayProcessing(TimeSpan.FromSeconds(0));
         _messages.Clear();
-        _gptClient.Conversation.History.Lock(h => h.Reset());
+        _gptClient.Reset();
         
         base.Reset();
+        
+        DelayProcessing(TimeSpan.FromSeconds(0));
     }
 }

@@ -2,8 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TwitchGpt", "TwitchGpt\TwitchGpt.csproj", "{2EC6D01A-316F-451A-9709-9176306778C0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GptLib", "..\GptLib\GptLib\GptLib.csproj", "{C0891F60-81B9-43BF-BF6B-2B3BF578727A}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoostyLib", "..\BoostyLib\BoostyLib.csproj", "{9DB59B40-3D99-4C47-8B6A-88E074BBD476}"
 EndProject
 Global
@@ -16,10 +14,6 @@ Global
 		{2EC6D01A-316F-451A-9709-9176306778C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2EC6D01A-316F-451A-9709-9176306778C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2EC6D01A-316F-451A-9709-9176306778C0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C0891F60-81B9-43BF-BF6B-2B3BF578727A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C0891F60-81B9-43BF-BF6B-2B3BF578727A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C0891F60-81B9-43BF-BF6B-2B3BF578727A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C0891F60-81B9-43BF-BF6B-2B3BF578727A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{9DB59B40-3D99-4C47-8B6A-88E074BBD476}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9DB59B40-3D99-4C47-8B6A-88E074BBD476}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9DB59B40-3D99-4C47-8B6A-88E074BBD476}.Release|Any CPU.ActiveCfg = Release|Any CPU

@@ -7,23 +7,23 @@ namespace TwitchGpt.Gpt;
 
 public static class ClientFactory
 {
-    private static List<string> geminiTokens = new();
+    private static List<string> _geminiTokens = new();
 
     private static ConcurrentDictionary<ClientType, Client> clients = new();
 
     static ClientFactory()
     {
-        geminiTokens = TokenMapper.Instance.GetGeminiTokenPool().Result;
+        _geminiTokens = TokenMapper.Instance.GetGeminiTokenPool().Result;
     }
 
     public static readonly RoleModel DefaultRole  = ModelFactory.Get("default").Result!;
 
     public static async Task<Client> CreateClient(ClientType type)
     {
-        if (clients.TryGetValue(type, out var client))
-            return client;
+        // if (clients.TryGetValue(type, out var client))
+        //     return client;
 
-        client = new Client(type, geminiTokens);
+        var client = new Client(type, _geminiTokens);
         clients[type] = client;
 
         if (type == ClientType.ChatWatcher)

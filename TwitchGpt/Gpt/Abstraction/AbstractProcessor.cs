@@ -1,7 +1,5 @@
-﻿using GptLib;
-using GptLib.Exceptions;
-using GptLib.Uploads;
-using NLog;
+﻿using NLog;
+using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Entities;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 
@@ -29,7 +27,7 @@ public abstract class AbstractProcessor
 
     public abstract Task Run(CancellationToken token);
 
-    public static uint SnapshotHistoryCount = 3;
+    public static int SnapshotHistoryCount = 3;
 
     protected void SendMessage(string text)
     {
@@ -56,11 +54,8 @@ public abstract class AbstractProcessor
 
     public async Task OnTwitchStreamInfo(TwitchStreamInfo info)
     {
-        var msg = new GptQuestion()
-        {
-            Tag = "twitch_stream_info"
-        };
-
+        var msgTag = "twitch_stream_info";
+        
         if (_lastTwitchStreamStatus.HasValue && _lastTwitchStreamStatus.Value == false && !info.Online)
             return;
 
@@ -72,25 +67,27 @@ public abstract class AbstractProcessor
         else
             emoteLine += "нет";
 
+        var msgText = "";
+        FileSourceInfo fileSourceInfo = null;
         if (info.Online)
         {
-            msg.Text = "Стрим на Twitch сейчас онлайн, ты можешь по нему дать информацию и о том, что происходит на экране.\r\n" +
-                       $"Канал Twitch стримера: '{info.Stream.UserName}'\r\n" +
-                       $"Название стрима на Twitch: '{info.Stream.Title}'\r\n" +
-                       $"Категория (игра) на стриме Twitch: {info.Stream.GameName}\r\n" +
-                       $"Теги стрима Twitch: {string.Join(", ", info.Stream.Tags)}\r\n" +
-                       $"Количество зрителей на Twitch стриме: {info.Stream.ViewerCount}\r\n" +
-                       $"Время начала Twitch стрима: {info.Stream.StartedAt.ToLocalTime()}\r\n" +
-                       $"Текущее время: {DateTime.Now}\r\n" +
-                       emoteLine + "\r\n";
+            msgText = "Стрим на Twitch сейчас онлайн, ты можешь по нему дать информацию и о том, что происходит на экране.\r\n" +
+                      $"Канал Twitch стримера: '{info.Stream.UserName}'\r\n" +
+                      $"Название стрима на Twitch: '{info.Stream.Title}'\r\n" +
+                      $"Категория (игра) на стриме Twitch: {info.Stream.GameName}\r\n" +
+                      $"Теги стрима Twitch: {string.Join(", ", info.Stream.Tags)}\r\n" +
+                      $"Количество зрителей на Twitch стриме: {info.Stream.ViewerCount}\r\n" +
+                      $"Время начала Twitch стрима: {info.Stream.StartedAt.ToLocalTime()}\r\n" +
+                      $"Текущее время: {DateTime.Now}\r\n" +
+                      emoteLine + "\r\n";
 
             if (!string.IsNullOrEmpty(info.Snapshot))
-                msg.Text +=
+                msgText +=
                     "Кадр стрима на Twitch на текущий момент, по которому ты можешь определить, что на нем происходит, прикрепляю файлом";
-            msg.Files.Add(FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot), await File.ReadAllBytesAsync(info.Snapshot)));
+            fileSourceInfo = FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot), await File.ReadAllBytesAsync(info.Snapshot));
         }
         else
-            msg.Text =
+            msgText =
                 "Стрим на Twitch сейчас оффлайн. Ты не можешь по нему дать информацию, и сказать, что сейчас на экране.\r\n" +
                 emoteLine;
 
@@ -98,30 +95,17 @@ public abstract class AbstractProcessor
         try
         {
             if (GetType().Name == nameof(GptMessagesProcessor))
-                msg.Text = $"~{msg.Text}";
+                msgText = $"~{msgText}";
 
-            Logger.Info($"Sending twitch stream info message in {GetType().Name}: {msg.Text}");
+            Logger.Info($"Sending twitch stream info message in {GetType().Name}: {msgText}");
 
-            _gptClient.Conversation.History.Lock(h =>
-            {
-                while (h.Contents.Count(e => e.Tag == "twitch_stream_info") > SnapshotHistoryCount)
-                {
-                    var pos = h.Find(_ => _.Tag == "twitch_stream_info");
-                    if (pos == -1)
-                        break;
+            var countByTag = _gptClient.HistoryHolder.CountByTag(msgTag);
+            if (countByTag > SnapshotHistoryCount)
+                _gptClient.HistoryHolder.RemoveEntriesWithContentTag(msgTag, countByTag - SnapshotHistoryCount);
 
-                    h.RemoveAt(pos);
-                    h.RemoveAt(pos);
-                }
-            });
+            var res = await _gptClient.Ask(msgText, fileSourceInfo != null ? [fileSourceInfo] : []);
 
-            var res = await _gptClient.Ask(msg, _gptClient.Role);
-            if (res == null)
-                throw new Exception("Null response");
-            if (!res.Success)
-                throw new Exception("Not a success");
-
-            Logger.Info("Response: " + res.Answer.Text);
+            Logger.Info("Response: " + res);
         }
         catch (TooManyRequestsException ex)
         {
@@ -136,19 +120,18 @@ public abstract class AbstractProcessor
 
     public async Task OnBoostyStreamInfo(BoostyStreamInfo info)
     {
-        var msg = new GptQuestion()
-        {
-            Tag = "boosty_stream_info"
-        };
+        var msgTag = "boosty_stream_info";
 
         if (_lastBoostyStreamStatus.HasValue && _lastBoostyStreamStatus.Value == false && !info.Online)
             return;
 
         _lastBoostyStreamStatus = info.Online;
 
+        var msgText = "";
+        FileSourceInfo fileSourceInfo = null;
         if (info.Online)
         {
-            msg.Text =
+            msgText =
                 "Стрим на Бусти сейчас онлайн, ты можешь по нему дать информацию и о том, что происходит на экране.\r\n" +
                 $"Канал Бусти стримера: '{info.Stream.User.Name}'\r\n" +
                 $"Название стрима на Бусти: '{info.Stream.Title}'\r\n" +
@@ -159,42 +142,30 @@ public abstract class AbstractProcessor
                 $"Текущее время: {DateTime.Now}\r\n";
 
             if (!string.IsNullOrEmpty(info.Snapshot))
-                msg.Text +=
+                msgText +=
                     "Кадр стрима на Бусти текущий момент, по которому ты можешь определить, что на нем происходит, прикрепляю файлом";
-            msg.Files.Add(FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot), await File.ReadAllBytesAsync(info.Snapshot)));
+            fileSourceInfo = FileSourceInfo.FromBlob(Path.GetFileName(info.Snapshot),
+                await File.ReadAllBytesAsync(info.Snapshot));
         }
         else
-            msg.Text =
+            msgText =
                 "Стрим на Бусти сейчас оффлайн. Ты не можешь по нему дать информацию, и сказать, что сейчас на экране.\r\n";
 
         var currentProviderHash = _gptClient.ProviderHash;
         try
         {
             if (GetType().Name == nameof(GptMessagesProcessor))
-                msg.Text = $"~{msg.Text}";
+                msgText = $"~{msgText}";
 
-            Logger.Info($"Sending boosty stream info message in {GetType().Name}: {msg.Text}");
+            Logger.Info($"Sending boosty stream info message in {GetType().Name}: {msgText}");
 
-            _gptClient.Conversation.History.Lock(h =>
-            {
-                while (h.Contents.Count(e => e.Tag == "boosty_stream_info") > SnapshotHistoryCount)
-                {
-                    var pos = h.Find(_ => _.Tag == "boosty_stream_info");
-                    if (pos == -1)
-                        break;
+            var countByTag = _gptClient.HistoryHolder.CountByTag(msgTag);
+            if (countByTag > SnapshotHistoryCount)
+                _gptClient.HistoryHolder.RemoveEntriesWithContentTag(msgTag, countByTag - SnapshotHistoryCount);
 
-                    h.RemoveAt(pos);
-                    h.RemoveAt(pos);
-                }
-            });
+            var res = await _gptClient.Ask(msgText, fileSourceInfo != null ? [fileSourceInfo] : []);
 
-            var res = await _gptClient.Ask(msg, _gptClient.Role);
-            if (res == null)
-                throw new Exception("Null response");
-            if (!res.Success)
-                throw new Exception("Not a success");
-
-            Logger.Info("Response: " + res.Answer.Text);
+            Logger.Info("Response: " + res);
         }
         catch (TooManyRequestsException ex)
         {

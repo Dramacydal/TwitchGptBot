@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using GptLib.Exceptions;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
@@ -17,8 +16,6 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
     
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _messages = new();
     
-    private Queue<string> _answers = new();
-
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) => _messages.Enqueue(new (text, chatMessage, role));
     
     public override async Task Run(CancellationToken token)
@@ -46,17 +43,7 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
             var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                var res = await _gptClient.Ask(
-                    new() { Text = $"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}" }, role);
-                if (!res.Success)
-                {
-                    Logger.Error("Empty response or not a succes, requeueing");
-                    if (res?.Success == false)
-                        Logger.Error($"Error: {res.Answer}");
-                    _messages.Enqueue(payload);
-                }
-
-                var responseText = res.Answer.Text;
+                var responseText = await _gptClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}");
                 var data = WeightedMessageData.Extract(responseText);
                 if (data != null)
                     responseText = data.Text;
@@ -77,11 +64,21 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
                 Logger.Warn("Client is busy. Requeueing");
                 _messages.Enqueue(payload);
             }
+            catch (UnavailableException ex)
+            {
+                Logger.Warn("Model is busy. Requeueing");
+                DelayProcessing(TimeSpan.FromMilliseconds(2500));
+                _messages.Enqueue(payload);
+            }
+            catch (UnknownGeminiException ex)
+            {
+                Logger.Error(
+                    $"Unknown gemini error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
+            }
             catch (SafetyException ex)
             {
                 Logger.Error(
                     $"Safety error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
-                _gptClient.Conversation.History.Lock(h => h.RollbackLastQuestion());
             }
             catch (Exception ex)
             {
@@ -98,8 +95,7 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
     {
         DelayProcessing(TimeSpan.FromSeconds(0));
         _messages.Clear();
-        _answers.Clear();
-        _gptClient.Conversation.History.Lock(h => h.Reset());
+        _gptClient.Reset();
         
         base.Reset();
     }

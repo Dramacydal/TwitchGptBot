@@ -26,13 +26,14 @@ public static class SnapshotHelper
         return str.Replace("\"", "\\\"");
     }
 
-    private static async Task ExecuteCommand(string command)
+    public static async Task ExecuteCommand(string command)
     {
+        var tcs = new TaskCompletionSource<int>();
         var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         var info = new ProcessStartInfo()
         {
-            FileName = isWindows ? "wsl.exe" : "/bin/bash",
+            FileName = isWindows ? "cmd.exe" : "/bin/bash",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -40,7 +41,7 @@ public static class SnapshotHelper
         };
 
         if (isWindows)
-            info.Arguments = "-- eval '" + command + "'";
+            info.Arguments = "/c \"" + command + "\"";
         else
             info.Arguments = "-c \"" + EscapeQuotes(command) + "\"";
         
@@ -49,16 +50,38 @@ public static class SnapshotHelper
         using var process = new Process();
         process.StartInfo = info;
         process.EnableRaisingEvents = true;
+        
+        process.Exited += (sender, e) =>
+        {
+            if (sender is Process proc)
+            {
+                Console.WriteLine($"\n[Событие Exited] Процесс завершился с кодом выхода: {proc.ExitCode}");
+                tcs.SetResult(proc.ExitCode);
+            }
+        };
 
+        string output = "";
+        string error = "";
+
+        process.OutputDataReceived += (sender, e) =>
+        {
+            output += e.Data + Environment.NewLine;
+        };
+        
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            error += e.Data + Environment.NewLine;
+        };
+        
         if (!process.Start())
             throw new Exception("Failed to start process");
+
+        process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
+
+        await tcs.Task;
         
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-
-        if (process.ExitCode != 0)
+        if (tcs.Task.Result != 0)
             throw new Exception(
                 $"Failed to get stream snapshot. ExitCode: {process.ExitCode}, message: {error}");
     }

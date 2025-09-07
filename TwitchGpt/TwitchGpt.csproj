@@ -9,6 +9,8 @@
 
     <ItemGroup>
       <PackageReference Include="FFMpegCore" Version="5.1.0" />
+      <PackageReference Include="Google_GenerativeAI" Version="3.0.0" />
+      <PackageReference Include="MimeKit" Version="4.13.0" />
       <PackageReference Include="MongoDB.Driver" Version="3.1.0" />
       <PackageReference Include="MySqlConnector" Version="2.4.0" />
       <PackageReference Include="NLog" Version="5.3.4" />
@@ -29,7 +31,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\BoostyLib\BoostyLib.csproj" />
-      <ProjectReference Include="..\..\GptLib\GptLib\GptLib.csproj" />
     </ItemGroup>
 
 </Project>

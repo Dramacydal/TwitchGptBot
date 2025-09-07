@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using GptLib;
 using NLog;
 using TwitchGpt.Config;
 using TwitchGpt.Database.Mappers;
@@ -9,6 +8,7 @@ using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
+using TwitchGpt.Helpers;
 using TwitchLib.Api.Helix.Models.Channels.ModifyChannelInformation;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -313,7 +313,7 @@ public class MessageHandler
                     SendMessage($"Количество: {AbstractProcessor.SnapshotHistoryCount}");
                 else if (uint.TryParse(args.ArgumentsAsString, out var value))
                 {
-                    AbstractProcessor.SnapshotHistoryCount = Math.Clamp(value, 1, 10);
+                    AbstractProcessor.SnapshotHistoryCount = (int)Math.Clamp(value, 1, 10);
                     SendMessage($"Количество установлено в {AbstractProcessor.SnapshotHistoryCount}");
                     return;
                 }
