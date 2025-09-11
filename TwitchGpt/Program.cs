@@ -103,11 +103,11 @@ internal abstract class Program
             bot.BoostyClient = new StreamClient(boostyChannel, boostyApi);
         }
         
-        Console.CancelKeyPress += (_, e) =>
+        Console.CancelKeyPress += async (_, e) =>
         {
             Console.WriteLine("Ctrl+C received");
             e.Cancel = true;
-            bot.Stop();
+            await bot.Stop();
         };
 
         Console.WriteLine("Started");

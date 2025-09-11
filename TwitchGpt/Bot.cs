@@ -67,7 +67,7 @@ public class Bot
 
         _messageHandler = new MessageHandler(this, _credentials, user);
 
-        InitializeClient(user);
+        await InitializeClient(user);
 
         _gptTask = _gptHandler.RunAsync(cts.Token);
         _announcerTask = _announcer.RunAsync(cts.Token);
@@ -83,27 +83,27 @@ public class Bot
 
     private static int clientCounter = 0;
     
-    private void InitializeClient(User user)
+    private async Task InitializeClient(User user)
     {
         ++clientCounter;
 
         var currentClientCounter = clientCounter;
         
         _client = new TwitchClient();
-        _client.Initialize(new(_credentials.ApiUserName, _credentials.AccessToken), autoReListenOnExceptions: false);
+        _client.Initialize(new(_credentials.ApiUserName, _credentials.AccessToken));
 
         var credenatialsProblem = false;
         
-        _client.OnConnected += (sender, args) =>
+        _client.OnConnected += async (sender, args) =>
         {
             Logger.Trace($"{currentClientCounter} OnConnected");
-            _client.JoinChannel(user.Login);
+            await _client.JoinChannelAsync(user.Login);
         };
-        _client.OnJoinedChannel += (sender, args) => { Logger.Trace($"{currentClientCounter} OnJoinedChannel {user.Login}"); };
-        _client.OnLog += (sender, args) => { Logger.Trace(args.Data); };
-        _client.OnError += (sender, args) => { Logger.Error($"{args.Exception.GetType()}: {args.Exception.Message}"); };
-        _client.OnReconnected += (sender, args) => { Logger.Trace($"{currentClientCounter} OnReconnected"); };
-        _client.OnDisconnected += (sender, args) =>
+        _client.OnJoinedChannel += async (sender, args) => { Logger.Trace($"{currentClientCounter} OnJoinedChannel {user.Login}"); };
+        // _client.OnLog += (sender, args) => { Logger.Trace(args.Data); };
+        _client.OnError += async (sender, args) => { Logger.Error($"{args.Exception.GetType()}: {args.Exception.Message}"); };
+        _client.OnReconnected += async (sender, args) => { Logger.Trace($"{currentClientCounter} OnReconnected"); };
+        _client.OnDisconnected += async (sender, args) =>
         {
             Logger.Trace($"{currentClientCounter} OnDisconnected");
 
@@ -130,7 +130,7 @@ public class Bot
         {
             try
             {
-                await _messageHandler?.HandleCommand(args.Command, _gptHandler);
+                await _messageHandler?.HandleCommand(args.Command, args.ChatMessage, _gptHandler);
             }
             catch (Exception ex)
             {
@@ -138,7 +138,7 @@ public class Bot
             }
         };
         _client.OnUnaccountedFor += async (sender, args) => Logger.Trace($"{currentClientCounter} Unaccounted For: {args.RawIRC}");
-        _client.OnIncorrectLogin += (sender, args) =>
+        _client.OnIncorrectLogin += async (sender, args) =>
         {
             Logger.Trace($"{currentClientCounter} Incorrect login, {args.Exception.GetType()}: {args.Exception.Message}");
             // _client.Disconnect();
@@ -147,7 +147,7 @@ public class Bot
             credenatialsProblem = true;
         };
         
-        _client.Connect();
+        await _client.ConnectAsync();
     }
 
     private async Task SomeTask()
@@ -162,17 +162,17 @@ public class Bot
 
     public async Task Restart()
     {
-        Stop();
+        await Stop();
         await Start();
     }
 
-    public void Stop()
+    public async Task Stop()
     {
         cts.Cancel();
         if (_client == null)
             return;
 
-        _client.Disconnect();
+        await _client.DisconnectAsync();
     }
 
     public void SetWatchEnabled(bool on)

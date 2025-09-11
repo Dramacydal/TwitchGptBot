@@ -30,7 +30,7 @@ public class Announcer(Bot bot, User user)
 
             try
             {
-                bot.Client.SendMessage(user.Login, announcement.Message);
+                await bot.Client.SendMessageAsync(user.Login, announcement.Message);
             }
             catch (Exception ex)
             {

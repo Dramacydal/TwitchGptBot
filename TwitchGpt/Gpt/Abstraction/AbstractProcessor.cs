@@ -29,11 +29,11 @@ public abstract class AbstractProcessor
 
     public static int SnapshotHistoryCount = 3;
 
-    protected void SendMessage(string text)
+    protected async Task SendMessage(string text)
     {
         try
         {
-            _bot.Client.SendMessage(_channelUser.Login, text);
+            await _bot.Client.SendMessageAsync(_channelUser.Login, text);
         }
         catch (Exception ex)
         {

@@ -51,7 +51,7 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
                 if (!responseText.ToLower().Contains($"@{chatMessage.Username.ToLower()}"))
                     responseText = $"@{chatMessage.Username} {responseText}";
 
-                SendMessage(responseText);
+                await SendMessage(responseText);
             }
             catch (TooManyRequestsException ex)
             {

@@ -67,7 +67,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
                 Logger.Warn("---------");
                 Logger.Warn(res);
 
-                Respond(res);
+                await Respond(res);
 
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
             }
@@ -106,7 +106,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
         Logger.Info($"{nameof(GptMessagesProcessor)} stopped");
     }
 
-    private void Respond(string resText)
+    private async Task Respond(string resText)
     {
         var lines = resText.Split("\n").Select(_ => _.Trim()).ToList();
 
@@ -131,7 +131,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
         if (!text.ToLower().Contains($"@{selected.UserName.ToLower()}"))
             text = $"@{selected.UserName} {text}";
 
-        SendMessage(text);
+        await SendMessage(text);
     }
 
     public override void Reset()
