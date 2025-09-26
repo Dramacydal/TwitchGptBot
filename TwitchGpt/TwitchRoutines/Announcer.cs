@@ -30,7 +30,7 @@ public class Announcer(Bot bot, User user)
 
             try
             {
-                if (bot.GetMessagesToLog())
+                if (bot.IsDryDun())
                     Logger.Trace($">> {announcement.Message}");
                 else
                     await bot.Client.SendMessageAsync(user.Login, announcement.Message);

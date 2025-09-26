@@ -549,7 +549,7 @@ public class MessageHandler
     {
         try
         {
-            if (_bot.GetMessagesToLog())
+            if (_bot.IsDryDun())
                 Logger.Trace($">> {text}");
             else
                 await _bot.Client.SendMessageAsync(_channelUser.Login, text);

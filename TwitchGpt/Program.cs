@@ -111,7 +111,7 @@ internal abstract class Program
         };
 
         if (namedArgs.TryGetBool("messages-to-log", out var messagesToLog))
-            bot.SetMessagesToLog(messagesToLog);
+            bot.SetDryRun(messagesToLog);
 
         Console.WriteLine("Started");
 

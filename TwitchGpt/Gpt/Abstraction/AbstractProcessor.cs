@@ -33,7 +33,7 @@ public abstract class AbstractProcessor
     {
         try
         {
-            if (_bot.GetMessagesToLog())
+            if (_bot.IsDryDun())
                 Logger.Trace($">> {text}");
             else
                 await _bot.Client.SendMessageAsync(_channelUser.Login, text);

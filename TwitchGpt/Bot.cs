@@ -20,7 +20,7 @@ public class Bot
     private CancellationTokenSource cts = new();
     private readonly TwitchApiCredentials _credentials;
     private readonly string _channelId;
-    private bool _messagesToLog;
+    private bool _dryRun;
 
     private GptWatcher _gptHandler;
 
@@ -192,7 +192,7 @@ public class Bot
         await _announcer.Reload();
     }
 
-    public void SetMessagesToLog(bool messagesToLog) => _messagesToLog = messagesToLog;
+    public void SetDryRun(bool dryRun) => _dryRun = dryRun;
 
-    public bool GetMessagesToLog() => _messagesToLog;
+    public bool IsDryDun() => _dryRun;
 }
