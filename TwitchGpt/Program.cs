@@ -110,6 +110,9 @@ internal abstract class Program
             await bot.Stop();
         };
 
+        if (namedArgs.TryGetBool("messages-to-log", out var messagesToLog))
+            bot.SetMessagesToLog(messagesToLog);
+
         Console.WriteLine("Started");
 
         await bot.Start();

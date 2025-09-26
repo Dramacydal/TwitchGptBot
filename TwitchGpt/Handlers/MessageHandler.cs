@@ -549,7 +549,10 @@ public class MessageHandler
     {
         try
         {
-            await _bot.Client.SendMessageAsync(_channelUser.Login, text);
+            if (_bot.GetMessagesToLog())
+                Logger.Trace($">> {text}");
+            else
+                await _bot.Client.SendMessageAsync(_channelUser.Login, text);
         }
         catch (Exception ex)
         {

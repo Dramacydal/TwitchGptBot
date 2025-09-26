@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
-using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
+using TwitchGpt.Gpt.Responses;
 using TwitchGpt.Handlers;
 using TwitchGpt.Helpers;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
@@ -18,7 +18,7 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
     
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
-    public int ProcessPeriod { get; set; } = 60;
+    public int ProcessPeriod { get; set; } = 120;
     // public int ProcessPeriod { get; set; } = 10;
     
     public override async Task Run(CancellationToken token)
@@ -61,10 +61,13 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
                 if (_gptClient.HistoryHolder.Count() > 100)
                     _gptClient.HistoryHolder.Reset();
 
-                var res = await _gptClient.Ask(formatted);
-
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
+                
+                var res = await _gptClient.Ask<ChatLogResponse>(formatted);
+                if (res == null)
+                    throw new UnknownGeminiException("Failed to get structured response");
+
                 Logger.Warn(res);
 
                 await Respond(res);
@@ -106,30 +109,17 @@ public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor
         Logger.Info($"{nameof(GptMessagesProcessor)} stopped");
     }
 
-    private async Task Respond(string resText)
+    private async Task Respond(ChatLogResponse response)
     {
-        var lines = resText.Split("\n").Select(_ => _.Trim()).ToList();
-
-        List<WeightedMessageData> parsed = new();
-        foreach (var line in lines)
-        {
-            var lineData = WeightedMessageData.Extract(line);
-            if (lineData != null)
-                parsed.Add(lineData);
-        }
-
-        if (parsed.Count == 0)
-            return;
-
-        var selected = parsed.Where(_ =>
-            _.UserName.Length > 0 && _.Text.Length > 0).Random();
+        var selected = response.ChatterReplies.Where(r =>
+            r.ChatterUserName.Length > 0 && r.Reply.Length > 0).Random();
 
         if (selected == null)
             return;
 
-        var text = selected.Text;
-        if (!text.ToLower().Contains($"@{selected.UserName.ToLower()}"))
-            text = $"@{selected.UserName} {text}";
+        var text = selected.Reply;
+        if (!text.ToLower().Contains($"{selected.ChatterUserName.ToLower()}"))
+            text = $"@{selected.ChatterUserName} {text}";
 
         await SendMessage(text);
     }

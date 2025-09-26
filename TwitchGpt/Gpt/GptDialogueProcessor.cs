@@ -3,6 +3,7 @@ using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
+using TwitchGpt.Gpt.Responses;
 using TwitchGpt.Handlers;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -43,12 +44,13 @@ public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor
             var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                var responseText = await _gptClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}");
-                var data = WeightedMessageData.Extract(responseText);
-                if (data != null)
-                    responseText = data.Text;
+                var response = await _gptClient.Ask<DirectMessageResponse>($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}");
+                if (response == null)
+                    throw new UnknownGeminiException("Failed to get structured response");
 
-                if (!responseText.ToLower().Contains($"@{chatMessage.Username.ToLower()}"))
+                var responseText = response.Reponse;
+
+                if (!responseText.ToLower().Contains($"{chatMessage.Username.ToLower()}"))
                     responseText = $"@{chatMessage.Username} {responseText}";
 
                 await SendMessage(responseText);

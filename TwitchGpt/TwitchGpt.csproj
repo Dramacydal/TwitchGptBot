@@ -33,8 +33,4 @@
       <ProjectReference Include="..\..\BoostyLib\BoostyLib.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Gpt\Responses\" />
-    </ItemGroup>
-
 </Project>

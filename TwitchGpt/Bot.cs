@@ -20,10 +20,12 @@ public class Bot
     private CancellationTokenSource cts = new();
     private readonly TwitchApiCredentials _credentials;
     private readonly string _channelId;
-    
+    private bool _messagesToLog;
+
     private GptWatcher _gptHandler;
-    
+
     private Announcer _announcer;
+
 
     public Bot(TwitchApiCredentials credentials, string channelId)
     {
@@ -40,13 +42,13 @@ public class Bot
     }
 
     public string BotUserId => _credentials.ApiUserId;
-    
+
     public string BotUserName => _credentials.ApiUserName;
 
     public TwitchApiCaller TwitchApi { get; private set; }
-    
+
     public BoostyApiCaller? BoostyApi { get; set; }
-    
+
     public StreamClient? BoostyClient { get; set; }
 
     public TwitchClient Client => _client;
@@ -189,4 +191,8 @@ public class Bot
     {
         await _announcer.Reload();
     }
+
+    public void SetMessagesToLog(bool messagesToLog) => _messagesToLog = messagesToLog;
+
+    public bool GetMessagesToLog() => _messagesToLog;
 }

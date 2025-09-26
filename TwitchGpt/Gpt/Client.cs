@@ -117,8 +117,13 @@ public class Client
         foreach (var token in tokenPool)
             _aiPool.Add(new(token.GetHashCode(), new GoogleAi(token, client: CreateHttpClient(GetProxy()))));
     }
-    
-    public async Task<string> Ask(string question, List<FileSourceInfo>? files = null)
+
+    public async Task<string?> Ask(string question, List<FileSourceInfo>? files = null)
+    {
+        return await Ask<string>(question, files);
+    }
+
+    public async Task<T?> Ask<T>(string question, List<FileSourceInfo>? files = null) where T : class
     {
         // if (!await WaitHelper.WaitUntil(() => !IsBusy, TimeSpan.FromSeconds(2)))
         //     throw new ClientBusyException();
@@ -144,12 +149,12 @@ public class Client
 
             GetChatSession().History = HistoryHolder.CopyEntries();
 
-            var res = await GetChatSession().GenerateContentAsync(request);
+            var res = await GetChatSession().GenerateObjectAsync<T>(request);
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
-            
+        
             HistoryHolder.AddEntries(GetChatSession().History.TakeLast(2));
-
-            return res.Text();
+        
+            return res;
         }
         catch (Exception ex)
         {
