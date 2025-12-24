@@ -60,6 +60,7 @@ public class Client
         if (_model == null)
         {
             _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-06-17", config: new()
+            _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-09-2025", config: new()
                 {
                     ResponseMimeType = "text/plain",
                 },
