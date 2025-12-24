@@ -29,9 +29,9 @@ public class MessageHandler
 
     private List<string> _ignoredUsers;
 
-    private Dictionary<string, Game> _gamesById;
-    
-    private Dictionary<string, List<Game>> _gamesByName;
+    private Dictionary<string, Game> _gamesById = [];
+
+    private Dictionary<string, List<Game>> _gamesByName = [];
 
     private async Task LoadGames()
     {
@@ -461,7 +461,7 @@ public class MessageHandler
         return response.Users.FirstOrDefault();
     }
 
-    private Locker ignoreLock = new();
+    private readonly Lock _ignoreLock = new();
     
     private readonly Bot _bot;
     
@@ -481,7 +481,7 @@ public class MessageHandler
 
     private bool ToggleIgnore(string chatMessageUserId, string chatMessageUsername)
     {
-        using var l = ignoreLock.Acquire();
+        using var l = _ignoreLock.EnterScope();
         if (_ignoredUsers.Any(u => u == chatMessageUserId))
         {
             _ignoredUsers.Remove(chatMessageUserId);
@@ -499,7 +499,7 @@ public class MessageHandler
 
     private void UnIgnoreUser(User chatUser)
     {
-        using var l = ignoreLock.Acquire();
+        using var l = _ignoreLock.EnterScope();
         _ignoredUsers.RemoveAll(e => e == chatUser.Id);
 
         IgnoredUsersMapper.Instance.RemoveIgnoredUser(_channelUser.Id, chatUser.Id).Wait();
@@ -510,7 +510,7 @@ public class MessageHandler
         // if (IsAdmin(userId))
         //     return;
 
-        using var l = ignoreLock.Acquire();
+        using var l = _ignoreLock.EnterScope();
         if (_ignoredUsers.Contains(userId))
             return;
 
@@ -589,7 +589,7 @@ public class MessageHandler
 
     private bool IsIgnoredUser(string userId)
     {
-        using var l = ignoreLock.Acquire();
+        using var l = _ignoreLock.EnterScope();
 
         return _ignoredUsers.Contains(userId);
     }
