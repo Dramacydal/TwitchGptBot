@@ -74,9 +74,9 @@ public class GptMessagesProcessor : AbstractProcessor
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
                 
-                var res = await _gptClient.Ask<ChatLogResponse>(formatted, streamInfos);
-                if (res == null)
-                    throw new UnknownGeminiException("Failed to get structured response");
+                var res = await _gptClient.Ask(formatted, streamInfos);
+                if (string.IsNullOrWhiteSpace(res))
+                    throw new UnknownGeminiException("Response text is empty");
 
                 Logger.Warn(res);
 
@@ -119,6 +119,11 @@ public class GptMessagesProcessor : AbstractProcessor
         Logger.Info($"{nameof(GptMessagesProcessor)} stopped");
     }
 
+    private async Task Respond(string text)
+    {
+        await SendMessage(text);
+    }
+    
     private async Task Respond(ChatLogResponse response)
     {
         var selected = response.ChatterReplies.Where(r =>

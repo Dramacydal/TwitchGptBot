@@ -53,11 +53,9 @@ public class GptDialogueProcessor : AbstractProcessor
             var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                var response = await _gptClient.Ask<DirectMessageResponse>($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", streamInfos);
-                if (response == null)
-                    throw new UnknownGeminiException("Failed to get structured response");
-
-                var responseText = response.Reponse;
+                var responseText = await _gptClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", streamInfos);
+                if (string.IsNullOrWhiteSpace(responseText))
+                    throw new UnknownGeminiException("Response text is empty");
 
                 if (!responseText.ToLower().Contains($"{chatMessage.Username.ToLower()}"))
                     responseText = $"@{chatMessage.Username} {responseText}";

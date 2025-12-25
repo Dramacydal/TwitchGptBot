@@ -22,8 +22,8 @@ public class Client
     public RoleModel? Role { get; set; }
     
     public ClientType ClientType { get; private set; }
-    
-    public HistoryHolder HistoryHolder { get; private set; }
+
+    public HistoryHolder HistoryHolder { get; private set; } = new();
 
     public bool IsBusy { get; set; }
 
@@ -61,14 +61,14 @@ public class Client
     {
         if (_model == null)
         {
-            _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-09-2025", config: new()
-            //_model = GetAi().CreateGeminiModel("models/gemma-3-27b-it", config: new()
+            // _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-09-2025", config: new()
+            _model = GetAi().CreateGeminiModel("models/gemma-3-27b-it", config: new()
                 {
                     ResponseMimeType = "text/plain",
                 },
-                systemInstruction: GetPreparedInstructions(),
+                // systemInstruction: GetPreparedInstructions(),
                 safetyRatings: Role!.SafetySettings);
-            _supportsInstructions = true;
+            _supportsInstructions = false;
         }
 
         return _model;
@@ -102,28 +102,29 @@ public class Client
         if (excludeHash != 0 && ProviderHash == excludeHash)
             RotateClient();
     }
-    
+
     private HttpClient CreateHttpClient(IWebProxy? proxy)
     {
-        var proxiedHttpClientHandler = new HttpClientHandler() { UseProxy = proxy != null };
-        proxiedHttpClientHandler.Proxy = proxy;
-        return new HttpClient(proxiedHttpClientHandler);
+        return new HttpClient(new HttpClientHandler
+        {
+            UseProxy = proxy != null,
+            Proxy = proxy
+        });
     }
-
-    private Client(ClientType type, IEnumerable<string> tokenPool)
+   
+    private Client(IEnumerable<string> tokenPool)
     {
-        ClientType = type;
-
-        HistoryHolder = HistoryFactory.CreateHistory(type);
-
         foreach (var token in tokenPool)
+        {
             _aiPool.Add(new(token.GetHashCode(), new GoogleAi(token, client: CreateHttpClient(GetProxy()))));
+        }
     }
 
     public static async Task<Client> Create(ClientType type, IEnumerable<string> tokenPool, RoleModel? role = null)
     {
-        return new Client(type, tokenPool)
+        return new Client(tokenPool)
         {
+            HistoryHolder = HistoryFactory.Create(type),
             Role = role ?? await ClientFactory.GetDefaultRole()
         };
     }
