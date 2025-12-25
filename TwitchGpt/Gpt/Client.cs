@@ -29,6 +29,8 @@ public class Client
 
     public int ProviderHash => _aiPool[_poolIndex].Item1;
 
+    private bool _supportsInstructions;
+
     private IWebProxy? GetProxy()
     {
         try
@@ -60,11 +62,13 @@ public class Client
         if (_model == null)
         {
             _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-09-2025", config: new()
+            //_model = GetAi().CreateGeminiModel("models/gemma-3-27b-it", config: new()
                 {
                     ResponseMimeType = "text/plain",
                 },
-                systemInstruction: null,
+                systemInstruction: GetPreparedInstructions(),
                 safetyRatings: Role!.SafetySettings);
+            _supportsInstructions = true;
         }
 
         return _model;
@@ -73,17 +77,17 @@ public class Client
     private ChatSession GetChatSession()
     {
         if (_chatSession == null)
-        {
-            var preparedInstructions = string.Join("\r\n", Role.Instructions.Split("\n")
-                .Select(l => l.Trim())
-                .Where(l => !l.StartsWith("#"))
-            );
-            
-            _chatSession = GetModel()
-                .StartChat(systemInstruction: preparedInstructions);
-        }
+            _chatSession = GetModel().StartChat();
 
         return _chatSession;
+    }
+
+    private string GetPreparedInstructions()
+    {
+        return string.Join("\r\n", Role.Instructions.Split("\n")
+            .Select(l => l.Trim())
+            .Where(l => !l.StartsWith("#"))
+        );
     }
 
     public void RotateClient(int excludeHash = 0)
@@ -124,12 +128,12 @@ public class Client
         };
     }
 
-    public async Task<string?> Ask(string question, List<FileSourceInfo>? files = null)
+    public async Task<string?> Ask(string question, params AbstractStreamInfo?[] streamInfos)
     {
-        return await Ask<string>(question, files);
+        return await Ask<string>(question, streamInfos);
     }
 
-    public async Task<T?> Ask<T>(string question, List<FileSourceInfo>? files = null) where T : class
+    public async Task<T?> Ask<T>(string question, params AbstractStreamInfo?[] streamInfos) where T : class
     {
         // if (!await WaitHelper.WaitUntil(() => !IsBusy, TimeSpan.FromSeconds(2)))
         //     throw new ClientBusyException();
@@ -140,22 +144,27 @@ public class Client
 
         try
         {
+            var historyEntries = HistoryHolder.CopyEntries();
+
+            if (!_supportsInstructions)
+                PrependInstructions(historyEntries);
+
+            PrependStreamInfos(historyEntries, streamInfos);
+            GetChatSession().History = historyEntries;
+
             var request = new GenerateContentRequest();
+
             request.AddText(question);
-            foreach (var file in files ?? [])
+            
+            T? res;
+            if (typeof(T) == typeof(string))
             {
-                if (file.Blob != null)
-                    request.AddInlineData(Convert.ToBase64String(file.Blob), file.MimeType);
-                else
-                {
-                    request.AddInlineData(Convert.ToBase64String(File.ReadAllBytes(file.FilePath)), file.MimeType);
-                    // request.AddInlineFile(file.FilePath);
-                }
+                var r = await GetChatSession().GenerateContentAsync(request);
+                res = (T)(object)r.Text()!;
             }
+            else
+                res = await GetChatSession().GenerateObjectAsync<T>(request);
 
-            GetChatSession().History = HistoryHolder.CopyEntries();
-
-            var res = await GetChatSession().GenerateObjectAsync<T>(request);
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
         
             HistoryHolder.AddEntries(GetChatSession().History.TakeLast(2));
@@ -178,7 +187,33 @@ public class Client
             throw;
         }
     }
-    
+
+    private void PrependInstructions(List<Content> contents)
+    {
+        var request = new GenerateContentRequest();
+        request.AddText(GetPreparedInstructions());
+
+        for (var i = 0; i < request.Contents.Count; ++i)
+            contents.Insert(i, request.Contents[i]);
+    }
+
+    private void PrependStreamInfos(List<Content> contents, AbstractStreamInfo?[] streamInfos)
+    {
+        foreach (var streamInfo in streamInfos)
+        {
+            if (streamInfo == null)
+                continue;
+
+            var request = new GenerateContentRequest();
+            request.AddText(streamInfo.BuildMessage());
+            foreach (var (_, file) in streamInfo.SnapShots)
+                request.AddInlineData(Convert.ToBase64String(file.Blob), file.MimeType);
+
+            for (var i = 0; i < request.Contents.Count; ++i)
+                contents.Insert(i, request.Contents[i]);
+        }
+    }
+
     protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
 
     public void Reset()

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
+using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 using TwitchGpt.Gpt.Responses;
 using TwitchGpt.Handlers;
@@ -30,23 +31,20 @@ public class GptMessagesProcessor : AbstractProcessor
 
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
-    public int ProcessPeriod { get; set; } = 120;
+    public int ProcessPeriod { get; set; } = 5;
     // public int ProcessPeriod { get; set; } = 10;
     
-    public override async Task Run(CancellationToken token)
+    public override async Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos)
     {
         Logger.Info($"{nameof(GptMessagesProcessor)} started");
         for (; !token.IsCancellationRequested;)
         {
-            if (MessageHandler.IsSuspended || ProcessPeriod <= 0)
+            if (MessageHandler.IsSuspended || ProcessPeriod <= 0 || IsProcessingDelayed)
             {
                 await Task.Delay(200);
                 continue;
             }
-            
-            while (IsProcessingDelayed)
-                await Task.Delay(100);
-            
+
             List<ChatMessage> messages = new();
             for (var i = 0; i < 10 && _messages.TryPop(out var msg);)
             {
@@ -76,7 +74,7 @@ public class GptMessagesProcessor : AbstractProcessor
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
                 
-                var res = await _gptClient.Ask<ChatLogResponse>(formatted);
+                var res = await _gptClient.Ask<ChatLogResponse>(formatted, streamInfos);
                 if (res == null)
                     throw new UnknownGeminiException("Failed to get structured response");
 

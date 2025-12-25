@@ -2,17 +2,11 @@
 
 public class FileSourceInfo
 {
-    public string Name { get; set; }
+    private FileSourceInfo() {}
     
-    public long Size { get; set; }
-    
-    public string FilePath { get; set; }
+    public required string MimeType { get; init; }
 
-    public string MimeType { get; set; }
-    
-    public DateTime ModifyDate { get; set; }
-
-    public byte[]? Blob { get; set; }
+    public required byte[] Blob { get; init; }
 
     public static FileSourceInfo FromFilePath(string filePath)
     {
@@ -20,23 +14,17 @@ public class FileSourceInfo
 
         return new()
         {
-            Name = info.Name,
-            FilePath = Path.GetFullPath(filePath),
-            MimeType = MimeKit.MimeTypes.GetMimeType(filePath),
-            Size = info.Length,
-            ModifyDate = info.LastWriteTime,
+            MimeType = MimeKit.MimeTypes.GetMimeType(info.Name),
+            Blob = File.ReadAllBytes(filePath),
         };
     }
 
-    public static FileSourceInfo FromBlob(string name, byte[] blob)
+    public static FileSourceInfo FromBlob(string mimeType, byte[] blob)
     {
         return new()
         {
-            Name = name,
-            MimeType = MimeKit.MimeTypes.GetMimeType(name),
-            Size = blob.Length,
+            MimeType = mimeType,
             Blob = blob,
-            ModifyDate = DateTime.Now,
         };
     }
 }

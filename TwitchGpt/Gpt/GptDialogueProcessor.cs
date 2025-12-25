@@ -31,20 +31,17 @@ public class GptDialogueProcessor : AbstractProcessor
 
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) => _messages.Enqueue(new (text, chatMessage, role));
     
-    public override async Task Run(CancellationToken token)
+    public override async Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos)
     {
         Logger.Info($"{nameof(GptDialogueProcessor)} started");
         for (; !token.IsCancellationRequested;)
         {
-            if (MessageHandler.IsSuspended)
+            if (MessageHandler.IsSuspended || IsProcessingDelayed)
             {
                 await Task.Delay(200);
                 continue;
             }
-            
-            while (IsProcessingDelayed)
-                await Task.Delay(50);
-            
+
             if (!_messages.TryDequeue(out var payload))
             {
                 await Task.Delay(25);
@@ -56,7 +53,7 @@ public class GptDialogueProcessor : AbstractProcessor
             var currentProviderHash = _gptClient.ProviderHash;
             try
             {
-                var response = await _gptClient.Ask<DirectMessageResponse>($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}");
+                var response = await _gptClient.Ask<DirectMessageResponse>($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", streamInfos);
                 if (response == null)
                     throw new UnknownGeminiException("Failed to get structured response");
 
