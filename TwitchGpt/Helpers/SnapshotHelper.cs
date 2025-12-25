@@ -79,9 +79,9 @@ public static class SnapshotHelper
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
 
-        await tcs.Task;
+        var result = await tcs.Task;
         
-        if (tcs.Task.Result != 0)
+        if (result != 0)
             throw new Exception(
                 $"Failed to get stream snapshot. ExitCode: {process.ExitCode}, message: {error}");
     }

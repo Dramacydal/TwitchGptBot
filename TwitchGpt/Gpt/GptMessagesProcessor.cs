@@ -10,12 +10,24 @@ using TwitchLib.Client.Models;
 
 namespace TwitchGpt.Gpt;
 
-public class GptMessagesProcessor(Bot bot, User channelUser) : AbstractProcessor(bot, channelUser)
+public class GptMessagesProcessor : AbstractProcessor
 {
-    protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatWatcher).Result;
-    
+    protected override Client _gptClient { get; set; }
+
     private ConcurrentStack<ChatMessage> _messages = new();
-    
+
+    private GptMessagesProcessor(Bot bot, User channelUser) : base(bot, channelUser)
+    {
+    }
+
+    public static async Task<GptMessagesProcessor> Create(Bot bot, User channelUser)
+    {
+        return new GptMessagesProcessor(bot, channelUser)
+        {
+            _gptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
+        };
+    }
+
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
     public int ProcessPeriod { get; set; } = 120;

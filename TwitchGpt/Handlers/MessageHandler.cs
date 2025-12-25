@@ -8,7 +8,6 @@ using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
-using TwitchGpt.Helpers;
 using TwitchLib.Api.Helix.Models.Channels.ModifyChannelInformation;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -19,7 +18,7 @@ public class MessageHandler
 {
     private readonly ConcurrentDictionary<string, DateTime> _openDialogues = new();
 
-    private RoleModel _role = ModelFactory.Get("default").Result!;
+    private RoleModel _role;
 
     private readonly List<string> _admins = ConfigManager.GetPath<List<string>>("admins") ?? [];
 
@@ -73,12 +72,12 @@ public class MessageHandler
             UpdateDialogue(userId, true);
 
             msg = msg.Replace($"@{_credentials.ApiUserName}", "");
-            gptWatcher.dialogueProcessor.EnqueueDirectMessage(msg, args, _role);
+            gptWatcher.DialogueProcessor.EnqueueDirectMessage(msg, args, _role);
         }
         else if (IsDialogueOpen(userId))
         {
             UpdateDialogue(userId);
-            gptWatcher.dialogueProcessor.EnqueueDirectMessage(msg, args, _role);
+            gptWatcher.DialogueProcessor.EnqueueDirectMessage(msg, args, _role);
         }
 
         if (replyToPos >= 0)
@@ -88,7 +87,7 @@ public class MessageHandler
             return;
 
         if (_messageWatchEnabled)
-            gptWatcher.messagesProcessor.EnqueueChatMessage(args);
+            gptWatcher.MessagesProcessor.EnqueueChatMessage(args);
     }
 
     public static bool IsSuspended { get; private set; }
@@ -117,7 +116,7 @@ public class MessageHandler
             {
                 UpdateDialogue(messageUserId);
                 if (!string.IsNullOrEmpty(command.ArgumentsAsString))
-                    gptWatcher.dialogueProcessor.EnqueueDirectMessage(command.ArgumentsAsString, msg, _role);
+                    gptWatcher.DialogueProcessor.EnqueueDirectMessage(command.ArgumentsAsString, msg, _role);
                 break;
             }
             case "stop":
@@ -130,7 +129,7 @@ public class MessageHandler
             case "gpt":
             {
                 UpdateDialogue(messageUserId, true);
-                gptWatcher.dialogueProcessor.EnqueueDirectMessage(command.ArgumentsAsString, msg, _role);
+                gptWatcher.DialogueProcessor.EnqueueDirectMessage(command.ArgumentsAsString, msg, _role);
                 break;
             }
             case "reset":
@@ -207,10 +206,10 @@ public class MessageHandler
                     return;
 
                 _messageWatchEnabled = !_messageWatchEnabled;
-                if (gptWatcher.messagesProcessor.ProcessPeriod <= 0)
-                    gptWatcher.messagesProcessor.ProcessPeriod = 25;
+                if (gptWatcher.MessagesProcessor.ProcessPeriod <= 0)
+                    gptWatcher.MessagesProcessor.ProcessPeriod = 25;
 
-                await SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " +
+                await SendMessage($"Реакция на чат каждые {gptWatcher.MessagesProcessor.ProcessPeriod} сек " +
                             (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
             }
@@ -222,21 +221,21 @@ public class MessageHandler
                 if (string.IsNullOrEmpty(command.ArgumentsAsString) ||
                     !int.TryParse(command.ArgumentsAsString, out var period))
                 {
-                    await SendMessage($"Реакция на чат каждые {gptWatcher.messagesProcessor.ProcessPeriod} сек " +
+                    await SendMessage($"Реакция на чат каждые {gptWatcher.MessagesProcessor.ProcessPeriod} сек " +
                                 (_messageWatchEnabled ? "ON" : "OFF"));
                     return;
                 }
 
                 if (period == 0)
                 {
-                    period = gptWatcher.messagesProcessor.ProcessPeriod;
+                    period = gptWatcher.MessagesProcessor.ProcessPeriod;
                     _messageWatchEnabled = false;
                 }
 
                 if (period < 10)
                     period = 10;
 
-                gptWatcher.messagesProcessor.ProcessPeriod = period;
+                gptWatcher.MessagesProcessor.ProcessPeriod = period;
 
                 await SendMessage($"Реакция на чат каждые {period} сек " + (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
@@ -469,14 +468,24 @@ public class MessageHandler
     
     private readonly User _channelUser;
 
-    public MessageHandler(Bot bot, TwitchApiCredentials credentials, User channelUser)
+    private MessageHandler(Bot bot, TwitchApiCredentials credentials, User channelUser)
     {
         _bot = bot;
         _credentials = credentials;
         _channelUser = channelUser;
-        _ignoredUsers = IgnoredUsersMapper.Instance.GetIgnoredUsers(channelUser.Id).Result;
+    }
 
-        LoadGames().Wait();
+    public static async Task<MessageHandler> Create(Bot bot, TwitchApiCredentials credentials, User channelUser)
+    {
+        var instance = new MessageHandler(bot, credentials, channelUser)
+        {
+            _ignoredUsers = await IgnoredUsersMapper.Instance.GetIgnoredUsers(channelUser.Id),
+            _role = (await ModelFactory.Get("default"))!
+        };
+
+        await instance.LoadGames();
+
+        return instance;
     }
 
     private bool ToggleIgnore(string chatMessageUserId, string chatMessageUsername)

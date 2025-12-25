@@ -20,7 +20,14 @@ public class Announcer(Bot bot, User user)
 
         for (; !token.IsCancellationRequested;)
         {
-            if (_announcementDelay <= TimeSpan.Zero || _nextAnnouncementTime > DateTime.Now || !Dequeue(out var announcement))
+            if (_announcementDelay <= TimeSpan.Zero || _nextAnnouncementTime > DateTime.Now)
+            {
+                await Task.Delay(200);
+                continue;
+            }
+
+            var announcement = await Dequeue();
+            if (announcement == null)
             {
                 await Task.Delay(200);
                 continue;
@@ -44,21 +51,21 @@ public class Announcer(Bot bot, User user)
         }
     }
 
-    private bool Dequeue(out Announcement? announcement)
+    private async Task<Announcement?> Dequeue()
     {
-        if (!_announcements.TryDequeue(out announcement))
-            return false;
+        if (!_announcements.TryDequeue(out var announcement))
+            return null;
 
         if (announcement.Condition == null)
-            return true;
+            return announcement;
 
-        if (!announcement.IsEnabled || !announcement.Condition.IsMatch(bot, user).Result)
+        if (!announcement.IsEnabled || !await announcement.Condition.IsMatch(bot, user))
         {
             _announcements.Enqueue(announcement);
-            return false;
+            return null;
         }
 
-        return true;
+        return announcement;
     }
 
     public async Task Reload()

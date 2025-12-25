@@ -67,7 +67,7 @@ internal abstract class Program
 
         var api = await CredentialsFactory.GetTwitchBotCredentials(botId);
 
-        var bot = new Bot(api, channel.ToString());
+        var bot = await Bot.Create(api, channel.ToString());
 
         if (namedArgs.TryGetString("boosty-channel", out var boostyChannel) &&
             namedArgs.TryGetString("boosty-api-name", out var boostyApiName))

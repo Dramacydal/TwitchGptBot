@@ -17,32 +17,32 @@ public static class FFMpegHelper
     {
         var analyseResult = await FFProbe.AnalyseAsync(input).ConfigureAwait(false);
         
-        (FFMpegArguments, Action<FFMpegArgumentOptions> outputOptions) tuple = BuildSnapshotArguments(input, analyseResult, size, captureTime, streamIndex, inputFileIndex, codec);
+        var (args, outputOptions) = BuildSnapshotArguments(input, analyseResult, size, captureTime, streamIndex, inputFileIndex, codec);
         
-        return await tuple.Item1.OutputToFile(output, true, tuple.outputOptions).ProcessAsynchronously();
+        return await args.OutputToFile(output, true, outputOptions).ProcessAsynchronously();
     }
     
     private static Size? PrepareSnapshotSize(IMediaAnalysis source, Size? wantedSize)
     {
         if (!wantedSize.HasValue || wantedSize.Value.Height <= 0 && wantedSize.Value.Width <= 0 || source.PrimaryVideoStream == null)
-            return new Size?();
-        Size size = new Size(source.PrimaryVideoStream.Width, source.PrimaryVideoStream.Height);
+            return null;
+        Size size = new (source.PrimaryVideoStream.Width, source.PrimaryVideoStream.Height);
         if (source.PrimaryVideoStream.Rotation == 90 || source.PrimaryVideoStream.Rotation == 180)
-            size = new Size(source.PrimaryVideoStream.Height, source.PrimaryVideoStream.Width);
+            size = new (source.PrimaryVideoStream.Height, source.PrimaryVideoStream.Width);
         if (wantedSize.Value.Width == size.Width && wantedSize.Value.Height == size.Height)
-            return new Size?();
+            return null;
         if (wantedSize.Value.Width <= 0 && wantedSize.Value.Height > 0)
         {
-            double num = (double) wantedSize.Value.Height / (double) size.Height;
-            return new Size?(new Size((int) ((double) size.Width * num), (int) ((double) size.Height * num)));
+            double num = (double) wantedSize.Value.Height / size.Height;
+            return new ((int) (size.Width * num), (int) (size.Height * num));
         }
         if (wantedSize.Value.Height > 0 || wantedSize.Value.Width <= 0)
             return wantedSize;
         double num1 = (double) wantedSize.Value.Width / (double) size.Width;
-        return new Size?(new Size((int) ((double) size.Width * num1), (int) ((double) size.Height * num1)));
+        return new ((int) (size.Width * num1), (int) (size.Height * num1));
     }
-    
-    private static (FFMpegArguments, Action<FFMpegArgumentOptions> outputOptions) BuildSnapshotArguments(
+
+    private static (FFMpegArguments, Action<FFMpegArgumentOptions>) BuildSnapshotArguments(
         Uri input,
         IMediaAnalysis source,
         Size? size = null,
@@ -51,24 +51,27 @@ public static class FFMpegHelper
         int inputFileIndex = 0,
         Codec? codec = null)
     {
-        captureTime.GetValueOrDefault();
         if (!captureTime.HasValue)
-            captureTime = new TimeSpan?(TimeSpan.FromSeconds(source.Duration.TotalSeconds / 3.0));
+            captureTime = TimeSpan.FromSeconds(source.Duration.TotalSeconds / 3.0);
         size = PrepareSnapshotSize(source, size);
-        streamIndex.GetValueOrDefault();
         if (!streamIndex.HasValue)
         {
             VideoStream primaryVideoStream = source.PrimaryVideoStream;
             int index;
             if (primaryVideoStream == null)
             {
-                VideoStream videoStream = source.VideoStreams.FirstOrDefault<VideoStream>();
-                index = videoStream != null ? videoStream.Index : 0;
+                var videoStream = source.VideoStreams.FirstOrDefault();
+                index = videoStream?.Index ?? 0;
             }
             else
                 index = primaryVideoStream.Index;
-            streamIndex = new int?(index);
+
+            streamIndex = index;
         }
-        return (FFMpegArguments.FromUrlInput(input, (Action<FFMpegArgumentOptions>) (options => options.Seek(captureTime))), (Action<FFMpegArgumentOptions>) (options => options.SelectStream(streamIndex.Value, inputFileIndex).WithVideoCodec(codec ?? VideoCodec.Png).WithFrameOutputCount(1).Resize(size)));
+
+        return new(
+            FFMpegArguments.FromUrlInput(input, (Action<FFMpegArgumentOptions>)(options => options.Seek(captureTime))),
+            (options => options.SelectStream(streamIndex.Value, inputFileIndex).WithVideoCodec(codec ?? VideoCodec.Png)
+                .WithFrameOutputCount(1).Resize(size)));
     }
 }

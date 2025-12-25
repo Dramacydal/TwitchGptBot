@@ -106,16 +106,22 @@ public class Client
         return new HttpClient(proxiedHttpClientHandler);
     }
 
-    public Client(ClientType type, IEnumerable<string> tokenPool, RoleModel? role = null)
+    private Client(ClientType type, IEnumerable<string> tokenPool)
     {
         ClientType = type;
 
         HistoryHolder = HistoryFactory.CreateHistory(type);
 
-        Role = role ?? ClientFactory.DefaultRole;
-
         foreach (var token in tokenPool)
             _aiPool.Add(new(token.GetHashCode(), new GoogleAi(token, client: CreateHttpClient(GetProxy()))));
+    }
+
+    public static async Task<Client> Create(ClientType type, IEnumerable<string> tokenPool, RoleModel? role = null)
+    {
+        return new Client(type, tokenPool)
+        {
+            Role = role ?? await ClientFactory.GetDefaultRole()
+        };
     }
 
     public async Task<string?> Ask(string question, List<FileSourceInfo>? files = null)

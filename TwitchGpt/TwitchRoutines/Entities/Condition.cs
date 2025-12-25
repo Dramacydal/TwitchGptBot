@@ -24,7 +24,7 @@ public class Condition
             case ConditionType.None:
                 return true;
             case ConditionType.TwitchStreamOnline:
-                match = await TwithOnline(bot, user);
+                match = await TwitchOnline(bot, user);
                 break;
             case ConditionType.BoostyStreamOnline:
                 match = await BoostyOnline(bot, user);
@@ -53,7 +53,7 @@ public class Condition
         }
     }
 
-    private async Task<bool> TwithOnline(Bot bot, User user)
+    private async Task<bool> TwitchOnline(Bot bot, User user)
     {
         try
         {

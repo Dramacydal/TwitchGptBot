@@ -27,18 +27,25 @@ public class Bot
     private Announcer _announcer;
 
 
-    public Bot(TwitchApiCredentials credentials, string channelId)
+    private Bot(TwitchApiCredentials credentials, string channelId)
     {
         _credentials = credentials;
         _channelId = channelId;
+    }
+
+    public static async Task<Bot> Create(TwitchApiCredentials credentials, string channelId)
+    {
+        var instance = new Bot(credentials, channelId);
 
         if (credentials.ApiUserId == channelId)
-            TwitchApi = new TwitchApiCaller(credentials);
+            instance.TwitchApi = new TwitchApiCaller(credentials);
         else
         {
-            var channelCredentials = CredentialsFactory.GetTwitchChannelCredentials(channelId).Result ?? credentials;
-            TwitchApi = new TwitchApiCaller(channelCredentials);
+            var channelCredentials = await CredentialsFactory.GetTwitchChannelCredentials(channelId) ?? credentials;
+            instance.TwitchApi = new TwitchApiCaller(channelCredentials);
         }
+
+        return instance;
     }
 
     public string BotUserId => _credentials.ApiUserId;
@@ -64,10 +71,10 @@ public class Bot
 
         var user = response.Users.First();
 
-        _gptHandler = new GptWatcher(this, user);
+        _gptHandler = await GptWatcher.Create(this, user);
         _announcer = new Announcer(this, user);
 
-        _messageHandler = new MessageHandler(this, _credentials, user);
+        _messageHandler = await MessageHandler.Create(this, _credentials, user);
 
         await InitializeClient(user);
 

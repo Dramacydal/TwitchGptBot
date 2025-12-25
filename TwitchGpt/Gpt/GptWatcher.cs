@@ -8,25 +8,44 @@ using TwitchLib.Api.Helix.Models.Users.GetUsers;
 
 namespace TwitchGpt.Gpt;
 
-public class GptWatcher(Bot bot, User channelUser)
+public class GptWatcher
 {
-    public GptMessagesProcessor messagesProcessor { get; } = new GptMessagesProcessor(bot, channelUser);
-    public GptDialogueProcessor dialogueProcessor { get; } = new GptDialogueProcessor(bot, channelUser);
+    public GptMessagesProcessor MessagesProcessor { get; private init; }
+    public GptDialogueProcessor DialogueProcessor { get; private init; }
 
     public void Reset()
     {
-        messagesProcessor.Reset();
-        dialogueProcessor.Reset();
+        MessagesProcessor.Reset();
+        DialogueProcessor.Reset();
     }
 
     private TwitchStreamInfo _twitchStream = new();
 
     private BoostyStreamInfo _boostyStream = new();
+    
+    private readonly Bot _bot;
+    
+    private readonly User _channelUser;
+
+    private GptWatcher(Bot bot, User channelUser)
+    {
+        _bot = bot;
+        _channelUser = channelUser;
+    }
+
+    public static async Task<GptWatcher> Create(Bot bot, User channelUser)
+    {
+        return new GptWatcher(bot, channelUser)
+        {
+            MessagesProcessor = await GptMessagesProcessor.Create(bot, channelUser),
+            DialogueProcessor = await GptDialogueProcessor.Create(bot, channelUser),
+        };
+    }
 
     public async Task RunAsync(CancellationToken token)
     {
-        var t1 = messagesProcessor.Run(token);
-        var t2 = dialogueProcessor.Run(token);
+        var t1 = MessagesProcessor.Run(token);
+        var t2 = DialogueProcessor.Run(token);
 
         var t3 = Task.Run(async () => await TwitchStreamChecker(token), token);
         var t4 = Task.Run(async () => await BoostyStreamChecker(token), token);
@@ -38,11 +57,7 @@ public class GptWatcher(Bot bot, User channelUser)
             await Task.Delay(200);
         }
 
-        
-        await t1;
-        await t2;
-        await t3;
-        await t4;
+        await Task.WhenAll(t1, t2, t3, t4);
     }
 
     private async Task TwitchStreamChecker(CancellationToken token)
@@ -70,8 +85,8 @@ public class GptWatcher(Bot bot, User channelUser)
                     }
                 }
 
-                var streams = await bot.TwitchApi.Call(api =>
-                    api.Helix.Streams.GetStreamsAsync(userLogins: [channelUser.Login]));
+                var streams = await _bot.TwitchApi.Call(api =>
+                    api.Helix.Streams.GetStreamsAsync(userLogins: [_channelUser.Login]));
                 if (streams.Streams.Length > 0)
                 {
                     _twitchStream.Online = true;
@@ -79,7 +94,7 @@ public class GptWatcher(Bot bot, User channelUser)
                     _twitchStream.Stream = stream;
 
                     var fileName = "temp_twitch.jpg";
-                    await SnapshotHelper.TakeTwitchSnapshot(channelUser.Login, fileName);
+                    await SnapshotHelper.TakeTwitchSnapshot(_channelUser.Login, fileName);
 
                     // using var img = await Image.LoadAsync(fileName);
                     // img.Mutate(x => x.Resize(1280, 720));
@@ -118,7 +133,7 @@ public class GptWatcher(Bot bot, User channelUser)
 
     private async Task BoostyStreamChecker(CancellationToken token)
     {
-        if (bot.BoostyClient == null)
+        if (_bot.BoostyClient == null)
             return;
         
         var firstRun = true;
@@ -132,7 +147,7 @@ public class GptWatcher(Bot bot, User channelUser)
             
             try
             {
-                var stream = await bot.BoostyApi.Call(api => api.VideoStream.Get(bot.BoostyClient.ChannelName));
+                var stream = await _bot.BoostyApi.Call(api => api.VideoStream.Get(_bot.BoostyClient.ChannelName));
                 if (stream != null && stream.VideoStreamData.Count > 0)
                 {
                     var playerData = stream.VideoStreamData[0].PlayerUrls.FirstOrDefault(p => p.Type == "live_hls");
@@ -191,7 +206,7 @@ public class GptWatcher(Bot bot, User channelUser)
     {
         var client = new HttpClient();
 
-        var result = await client.GetAsync($"https://api.betterttv.net/3/cached/users/twitch/{channelUser.Id}");
+        var result = await client.GetAsync($"https://api.betterttv.net/3/cached/users/twitch/{_channelUser.Id}");
         if (!result.IsSuccessStatusCode)
             return null;
 
@@ -220,7 +235,7 @@ public class GptWatcher(Bot bot, User channelUser)
             {
                 _twitchStream.NeedUpdate = false;
 
-                await messagesProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
+                await MessagesProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
                 // await dialogueProcessor.OnTwitchStreamInfo(_twitchStream).ConfigureAwait(false);
             }
         }
@@ -236,7 +251,7 @@ public class GptWatcher(Bot bot, User channelUser)
             {
                 _boostyStream.NeedUpdate = false;
 
-                await messagesProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
+                await MessagesProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
                 // await dialogueProcessor.OnBoostyStreamInfo(_boostyStream).ConfigureAwait(false);
             }
         }

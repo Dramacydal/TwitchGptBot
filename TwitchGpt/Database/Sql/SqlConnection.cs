@@ -12,9 +12,11 @@ public class SqlConnection(SqlConfig config)
         return conn;
     }
 
+    private MySqlCommand CreateCommand() => CreateConnection().CreateCommand();
+
     public SqlCommand Query(string text, Dictionary<string, object?> parameters)
     {
-        var command = CreateConnection().CreateCommand();
+        var command = CreateCommand();
         command.CommandText = text;
 
         foreach (var (key, value) in parameters)
@@ -25,11 +27,11 @@ public class SqlConnection(SqlConfig config)
 
     public SqlCommand Query(string text, params object[] parameters)
     {
-        var command = CreateConnection().CreateCommand();
+        var command = CreateCommand();
         command.CommandText = text;
 
-        for (var i = 0; i < parameters.Length; ++i)
-            command.Parameters.Add(new MySqlParameter(null, parameters[i]));
+        foreach (var parameter in parameters)
+            command.Parameters.Add(new MySqlParameter(null, parameter));
 
         return new SqlCommand(command);
     }

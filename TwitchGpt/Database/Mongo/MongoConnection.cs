@@ -10,7 +10,7 @@ public class MongoConnection(MongoConfig config)
         return conn;
     }
 
-    public IMongoDatabase Database => CreateConnection().GetDatabase(config.Database);
+    private IMongoDatabase Database => CreateConnection().GetDatabase(config.Database);
 
     public IMongoCollection<T> GetCollection<T>(string collectionName) => Database.GetCollection<T>(collectionName);
 }

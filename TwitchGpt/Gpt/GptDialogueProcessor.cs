@@ -10,13 +10,25 @@ using TwitchLib.Client.Models;
 
 namespace TwitchGpt.Gpt;
 
-public class GptDialogueProcessor(Bot bot, User channelUser) : AbstractProcessor(bot, channelUser)
+public class GptDialogueProcessor : AbstractProcessor
 {
     // protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatBot).Result;
-    protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatWatcher).Result;
+    protected override Client _gptClient { get; set; }
     
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _messages = new();
-    
+
+    private GptDialogueProcessor(Bot bot, User channelUser) : base(bot, channelUser)
+    {
+    }
+
+    public static async Task<GptDialogueProcessor> Create(Bot bot, User channelUser)
+    {
+        return new GptDialogueProcessor(bot, channelUser)
+        {
+            _gptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
+        };
+    }
+
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) => _messages.Enqueue(new (text, chatMessage, role));
     
     public override async Task Run(CancellationToken token)
