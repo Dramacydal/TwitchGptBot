@@ -71,7 +71,7 @@ public static class FFMpegHelper
 
         return new(
             FFMpegArguments.FromUrlInput(input, (Action<FFMpegArgumentOptions>)(options => options.Seek(captureTime))),
-            (options => options.SelectStream(streamIndex.Value, inputFileIndex).WithVideoCodec(codec ?? VideoCodec.Png)
+            (options => options.SelectStream(streamIndex.Value, inputFileIndex).WithVideoCodec(codec ?? VideoCodec.Image.Png)
                 .WithFrameOutputCount(1).Resize(size)));
     }
 }

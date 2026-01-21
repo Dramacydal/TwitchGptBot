@@ -31,7 +31,7 @@ public class ModelFactory
             model.Instructions = result.Instructions;
             model.Name = result.Name;
             model.Scopes = result.Scopes;
-            model.SafetySettings = result.SafetySettings;
+            // model.SafetySettings = result.SafetySettings;
         }
     }
 }

@@ -13,10 +13,10 @@ public static class ClientFactory
 
     private static readonly ConcurrentDictionary<ClientType, Client> clients = new();
 
-    private static async Task<List<string>> GetGeminiTokensAsync()
+    private static async Task<List<string>> GetOpenRouterKeysAsync()
     {
         if (_geminiTokens == null)
-            _geminiTokens = await TokenMapper.Instance.GetGeminiTokenPool();
+            _geminiTokens = await TokenMapper.Instance.GetOpenRouterKeyPool();
 
         return _geminiTokens;
     }
@@ -35,7 +35,7 @@ public static class ClientFactory
         // if (clients.TryGetValue(type, out var client))
         //     return client;
 
-        var client = await Client.Create(type, await GetGeminiTokensAsync());
+        var client = await Client.Create(type, await GetOpenRouterKeysAsync());
         clients[type] = client;
 
         if (type == ClientType.ChatWatcher)

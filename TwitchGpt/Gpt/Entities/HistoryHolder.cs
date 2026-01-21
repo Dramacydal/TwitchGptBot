@@ -1,13 +1,13 @@
-﻿using GenerativeAI.Types;
+﻿using OpenRouter.NET.Models;
 
 namespace TwitchGpt.Gpt.Entities;
 
 public class HistoryHolder
 {
-    private List<Content> _history = new();
+    private List<Message> _history = new();
 
-    private readonly Dictionary<Content, string> _contentTagDictionary = new();
-    private readonly List<Tuple<Content, string>> _contentTagList = new();
+    private readonly Dictionary<Message, string> _contentTagDictionary = new();
+    private readonly List<Tuple<Message, string>> _contentTagList = new();
 
     private readonly Lock _lock = new();
 
@@ -18,31 +18,28 @@ public class HistoryHolder
         a();
     }
     
-    public void AddEntries(IEnumerable<Content> entries, string tag = "")
-    {
-        foreach (var entry in entries)
-            AddEntry(entry, tag);
-    }
-
-    private void AddEntry(Content entry, string tag)
+    public void AddEntries(IEnumerable<Message> entries, string tag = "")
     {
         using var _ = _lock.EnterScope();
-
-        _history.Add(entry);
-        if (!string.IsNullOrEmpty(tag))
+        
+        foreach (var entry in entries)
         {
-            _contentTagDictionary.Add(entry, tag);
-            _contentTagList.Add(new(entry, tag));
+            _history.Add(entry);
+            if (!string.IsNullOrEmpty(tag))
+            {
+                _contentTagDictionary.Add(entry, tag);
+                _contentTagList.Add(new(entry, tag));
+            }
         }
     }
 
-    public List<Content> GetEntries() => _history;
+    public List<Message> GetEntries() => _history;
 
-    public List<Content> CopyEntries()
+    public List<Message> CopyEntries()
     {
         using var _ = _lock.EnterScope();
 
-        List<Content> entries = new();
+        List<Message> entries = new();
         foreach (var entry in _history)
             entries.Add(entry);
 
@@ -62,7 +59,7 @@ public class HistoryHolder
         _history.Clear();
     }
 
-    public void Set(List<Content> history)
+    public void Set(List<Message> history)
     {
         _history = history;
     }
@@ -91,7 +88,7 @@ public class HistoryHolder
         }
     }
 
-    private void RemoveContentTags(Content content)
+    private void RemoveContentTags(Message content)
     {
         _contentTagList.RemoveAll(e => e.Item1 == content);
         _contentTagDictionary.Remove(content);

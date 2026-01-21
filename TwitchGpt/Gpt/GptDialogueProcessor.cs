@@ -49,6 +49,8 @@ public class GptDialogueProcessor : AbstractProcessor
             }
 
             var (text, chatMessage, role) = payload;
+            
+            Logger.Debug($"Answering direct message: {text}");
 
             var currentProviderHash = _gptClient.ProviderHash;
             try

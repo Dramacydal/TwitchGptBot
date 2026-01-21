@@ -1,6 +1,4 @@
-﻿using GenerativeAI.Types;
-
-namespace TwitchGpt.Gpt.Entities;
+﻿namespace TwitchGpt.Gpt.Entities;
 
 public class RoleModel
 {
@@ -10,5 +8,5 @@ public class RoleModel
     
     public string Instructions { get; set; } = "";
 
-    public List<SafetySetting>? SafetySettings { get; set; } = new();
+    // public List<SafetySetting>? SafetySettings { get; set; } = new();
 }

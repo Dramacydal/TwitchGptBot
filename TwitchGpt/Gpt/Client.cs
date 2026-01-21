@@ -1,7 +1,7 @@
 ﻿using System.Net;
-using GenerativeAI;
-using GenerativeAI.Types;
 using NLog;
+using OpenRouter.NET;
+using OpenRouter.NET.Models;
 using TwitchGpt.Config;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Entities;
@@ -11,11 +11,7 @@ namespace TwitchGpt.Gpt;
 
 public class Client
 {
-    private readonly List<Tuple<int, GoogleAi>> _aiPool = new();
-
-    private GenerativeModel? _model;
-    
-    private ChatSession? _chatSession;
+    private readonly List<Tuple<int, OpenRouterClient>> _aiPool = new();
 
     private int _poolIndex = 0;
     
@@ -28,8 +24,6 @@ public class Client
     public bool IsBusy { get; set; }
 
     public int ProviderHash => _aiPool[_poolIndex].Item1;
-
-    private bool _supportsInstructions;
 
     private IWebProxy? GetProxy()
     {
@@ -52,34 +46,18 @@ public class Client
         }
     }
 
-    private GoogleAi GetAi()
+    private OpenRouterClient GetAi()
     {
         return _aiPool[_poolIndex].Item2;
     }
 
-    private GenerativeModel GetModel()
+    private ChatCompletionRequest CreateChatCompletionRequest()
     {
-        if (_model == null)
+        return new ChatCompletionRequest()
         {
-            // _model = GetAi().CreateGeminiModel("models/gemini-2.5-flash-lite-preview-09-2025", config: new()
-            _model = GetAi().CreateGeminiModel("models/gemma-3-27b-it", config: new()
-                {
-                    ResponseMimeType = "text/plain",
-                },
-                // systemInstruction: GetPreparedInstructions(),
-                safetyRatings: Role!.SafetySettings);
-            _supportsInstructions = false;
-        }
-
-        return _model;
-    }
-
-    private ChatSession GetChatSession()
-    {
-        if (_chatSession == null)
-            _chatSession = GetModel().StartChat();
-
-        return _chatSession;
+            Model = "google/gemini-2.5-flash-lite",
+            Reasoning = new ReasoningConfig() { Enabled = false },
+        };
     }
 
     private string GetPreparedInstructions()
@@ -111,12 +89,16 @@ public class Client
             Proxy = proxy
         });
     }
-   
+
     private Client(IEnumerable<string> tokenPool)
     {
         foreach (var token in tokenPool)
         {
-            _aiPool.Add(new(token.GetHashCode(), new GoogleAi(token, client: CreateHttpClient(GetProxy()))));
+            _aiPool.Add(new(token.GetHashCode(), new OpenRouterClient(new OpenRouterClientOptions()
+            {
+                ApiKey = token,
+                HttpClient = CreateHttpClient(GetProxy()),
+            })));
         }
     }
 
@@ -146,31 +128,38 @@ public class Client
         try
         {
             var historyEntries = HistoryHolder.CopyEntries();
-
-            if (!_supportsInstructions)
-                PrependInstructions(historyEntries);
-
-            PrependStreamInfos(historyEntries, streamInfos);
-            GetChatSession().History = historyEntries;
-
-            var request = new GenerateContentRequest();
-
-            request.AddText(question);
             
+            PrependStreamInfos(historyEntries, streamInfos);
+            
+            PrependInstructions(historyEntries);
+
+            var request = CreateChatCompletionRequest();
+            request.Messages = historyEntries;
+
+            request.Messages.AddUserMessage(question);
+
             T? res;
             if (typeof(T) == typeof(string))
             {
-                var r = await GetChatSession().GenerateContentAsync(request);
-                res = (T)(object)r.Text()!;
+                var response = await GetAi()!.CreateChatCompletionAsync(request);
+
+                var answerText = response.Choices[0].Message.Content?.ToString() ?? "";
+                res = (T)(object)answerText;
+
+                HistoryHolder.AddEntries([Message.FromUser(question), Message.FromAssistant(answerText)]);
             }
             else
-                res = await GetChatSession().GenerateObjectAsync<T>(request);
+                throw new Exception("Not implemented yet");
 
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
-        
-            HistoryHolder.AddEntries(GetChatSession().History.TakeLast(2));
-        
+
+
             return res;
+        }
+        catch (OpenRouterRateLimitException ex)
+        {
+            Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}, with error: {ex.Message}");
+            throw new TooManyRequestsException(ex.Message, ex);
         }
         catch (Exception ex)
         {
@@ -189,29 +178,25 @@ public class Client
         }
     }
 
-    private void PrependInstructions(List<Content> contents)
+    private void PrependInstructions(List<Message> contents)
     {
-        var request = new GenerateContentRequest();
-        request.AddText(GetPreparedInstructions());
-
-        for (var i = 0; i < request.Contents.Count; ++i)
-            contents.Insert(i, request.Contents[i]);
+        contents.Insert(0, Message.FromSystem(GetPreparedInstructions()));
     }
 
-    private void PrependStreamInfos(List<Content> contents, AbstractStreamInfo?[] streamInfos)
+    private void PrependStreamInfos(List<Message> contents, AbstractStreamInfo?[] streamInfos)
     {
         foreach (var streamInfo in streamInfos)
         {
             if (streamInfo == null)
                 continue;
 
-            var request = new GenerateContentRequest();
-            request.AddText(streamInfo.BuildMessage());
+            var streamInfoContent = new List<ContentPart>();
+            streamInfoContent.Add(new TextContent(streamInfo.BuildMessage()));
             foreach (var (_, file) in streamInfo.SnapShots)
-                request.AddInlineData(Convert.ToBase64String(file.Blob), file.MimeType);
+                streamInfoContent.Add(new ImageContent(
+                    $"data:{file.MimeType};base64,{Convert.ToBase64String(file.Blob)}"));
 
-            for (var i = 0; i < request.Contents.Count; ++i)
-                contents.Insert(i, request.Contents[i]);
+            contents.Insert(0, Message.FromUser(streamInfoContent));
         }
     }
 
@@ -219,8 +204,6 @@ public class Client
 
     public void Reset()
     {
-        _model = null;
-        _chatSession = null;
         HistoryHolder.Reset();
     }
 }

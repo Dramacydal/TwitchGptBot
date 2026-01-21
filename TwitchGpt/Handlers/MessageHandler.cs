@@ -170,15 +170,15 @@ public class MessageHandler
                 await _bot.ReloadAnnouncements();
                 break;
             }
-            case "safety":
-            case "ss":
-            {
-                if (!IsAdmin(messageUserId))
-                    return;
-
-                await SendMessage("SS: " + JsonSerializer.Serialize(_role.SafetySettings));
-                break;
-            }
+            // case "safety":
+            // case "ss":
+            // {
+            //     if (!IsAdmin(messageUserId))
+            //         return;
+            //
+            //     await SendMessage("SS: " + JsonSerializer.Serialize(_role.SafetySettings));
+            //     break;
+            // }
             case "resolve":
             {
                 var userNameOrId = command.ArgumentsAsString;
