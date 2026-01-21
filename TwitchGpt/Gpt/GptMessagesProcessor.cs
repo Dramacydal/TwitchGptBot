@@ -31,7 +31,7 @@ public class GptMessagesProcessor : AbstractProcessor
 
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
-    public int ProcessPeriod { get; set; } = 5;
+    public int ProcessPeriod { get; set; } = 30;
     // public int ProcessPeriod { get; set; } = 10;
     
     public override async Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos)
