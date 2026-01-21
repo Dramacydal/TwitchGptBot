@@ -13,7 +13,7 @@ namespace TwitchGpt.Gpt;
 
 public class GptMessagesProcessor : AbstractProcessor
 {
-    protected override Client _gptClient { get; set; }
+    public override Client GptClient { get; protected set; }
 
     private ConcurrentStack<ChatMessage> _messages = new();
 
@@ -25,7 +25,7 @@ public class GptMessagesProcessor : AbstractProcessor
     {
         return new GptMessagesProcessor(bot, channelUser)
         {
-            _gptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
+            GptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
         };
     }
 
@@ -65,16 +65,16 @@ public class GptMessagesProcessor : AbstractProcessor
 
             var formatted = "Проанализируй лог чата:\r\n" + string.Join("\r\n", messages.Select(_ => $"[{_.Username}]: {_.Message}"));
 
-            var currentProviderHash = _gptClient.ProviderHash;
+            var currentProviderHash = GptClient.ProviderHash;
             try
             {
-                if (_gptClient.HistoryHolder.Count() > 100)
-                    _gptClient.HistoryHolder.Reset();
+                if (GptClient.HistoryHolder.Count() > 100)
+                    GptClient.HistoryHolder.Reset();
 
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
                 
-                var res = await _gptClient.Ask(formatted, streamInfos);
+                var res = await GptClient.Ask(formatted, streamInfos);
                 if (string.IsNullOrWhiteSpace(res))
                     throw new UnknownGeminiException("Response text is empty");
 
@@ -88,7 +88,7 @@ public class GptMessagesProcessor : AbstractProcessor
             {
                 Logger.Error($"{ex.GetType()}: {ex.Message}");
                 Logger.Error(formatted);
-                _gptClient.RotateClient(currentProviderHash);
+                GptClient.RotateClient(currentProviderHash);
             }
             catch (ClientBusyException ex)
             {
@@ -142,7 +142,7 @@ public class GptMessagesProcessor : AbstractProcessor
     public override void Reset()
     {
         _messages.Clear();
-        _gptClient.Reset();
+        GptClient.Reset();
         
         base.Reset();
         

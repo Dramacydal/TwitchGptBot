@@ -22,7 +22,7 @@ public abstract class AbstractProcessor
 
     protected bool IsProcessingDelayed => _skipProcessingTime > DateTime.Now;
 
-    protected abstract Client _gptClient { get; set; }
+    public abstract Client GptClient { get; protected set; }
 
     public abstract Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos);
 

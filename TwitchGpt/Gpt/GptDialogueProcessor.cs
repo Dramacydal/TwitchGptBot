@@ -3,7 +3,6 @@ using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
-using TwitchGpt.Gpt.Responses;
 using TwitchGpt.Handlers;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -13,7 +12,7 @@ namespace TwitchGpt.Gpt;
 public class GptDialogueProcessor : AbstractProcessor
 {
     // protected override Client _gptClient => ClientFactory.CreateClient(ClientType.ChatBot).Result;
-    protected override Client _gptClient { get; set; }
+    public override Client GptClient { get; protected set; }
     
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _messages = new();
 
@@ -25,7 +24,7 @@ public class GptDialogueProcessor : AbstractProcessor
     {
         return new GptDialogueProcessor(bot, channelUser)
         {
-            _gptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
+            GptClient = await ClientFactory.CreateClient(ClientType.ChatWatcher)
         };
     }
 
@@ -52,10 +51,10 @@ public class GptDialogueProcessor : AbstractProcessor
             
             Logger.Debug($"Answering direct message: {text}");
 
-            var currentProviderHash = _gptClient.ProviderHash;
+            var currentProviderHash = GptClient.ProviderHash;
             try
             {
-                var responseText = await _gptClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", streamInfos);
+                var responseText = await GptClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", streamInfos);
                 if (string.IsNullOrWhiteSpace(responseText))
                     throw new UnknownGeminiException("Response text is empty");
 
@@ -67,7 +66,7 @@ public class GptDialogueProcessor : AbstractProcessor
             catch (TooManyRequestsException ex)
             {
                 Logger.Error($"{ex.GetType()}: {ex.Message}");
-                _gptClient.RotateClient(currentProviderHash);
+                GptClient.RotateClient(currentProviderHash);
                 _messages.Enqueue(payload);
             }
             catch (ClientBusyException ex)
@@ -106,7 +105,7 @@ public class GptDialogueProcessor : AbstractProcessor
     {
         DelayProcessing(TimeSpan.FromSeconds(0));
         _messages.Clear();
-        _gptClient.Reset();
+        GptClient.Reset();
         
         base.Reset();
     }

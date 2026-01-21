@@ -25,6 +25,21 @@ public class Client
 
     public int ProviderHash => _aiPool[_poolIndex].Item1;
 
+    public string Model { get; private set; } = "google/gemini-2.5-flash-lite";
+    
+    private List<ModelInfo>? _modelInfos;
+
+    public async Task SetModel(string modelId)
+    {
+        if (_modelInfos == null)
+            _modelInfos = await GetOpenRouter().GetModelsAsync();
+
+        if (_modelInfos.All(m => m.Id != modelId))
+            throw new Exception($"Model {modelId} not found");
+
+        Model = modelId;
+    }
+
     private IWebProxy? GetProxy()
     {
         try
@@ -46,7 +61,7 @@ public class Client
         }
     }
 
-    private OpenRouterClient GetAi()
+    private OpenRouterClient GetOpenRouter()
     {
         return _aiPool[_poolIndex].Item2;
     }
@@ -55,7 +70,7 @@ public class Client
     {
         return new ChatCompletionRequest()
         {
-            Model = "google/gemini-2.5-flash-lite",
+            Model = Model,
             Reasoning = new ReasoningConfig() { Enabled = false },
         };
     }
@@ -141,7 +156,7 @@ public class Client
             T? res;
             if (typeof(T) == typeof(string))
             {
-                var response = await GetAi()!.CreateChatCompletionAsync(request);
+                var response = await GetOpenRouter()!.CreateChatCompletionAsync(request);
 
                 var answerText = response.Choices[0].Message.Content?.ToString() ?? "";
                 res = (T)(object)answerText;

@@ -210,7 +210,7 @@ public class MessageHandler
                     gptWatcher.MessagesProcessor.ProcessPeriod = 25;
 
                 await SendMessage($"Реакция на чат каждые {gptWatcher.MessagesProcessor.ProcessPeriod} сек " +
-                            (_messageWatchEnabled ? "ON" : "OFF"));
+                                  (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
             }
             case "watchperiod":
@@ -222,7 +222,7 @@ public class MessageHandler
                     !int.TryParse(command.ArgumentsAsString, out var period))
                 {
                     await SendMessage($"Реакция на чат каждые {gptWatcher.MessagesProcessor.ProcessPeriod} сек " +
-                                (_messageWatchEnabled ? "ON" : "OFF"));
+                                      (_messageWatchEnabled ? "ON" : "OFF"));
                     return;
                 }
 
@@ -318,6 +318,7 @@ public class MessageHandler
                 }
                 else
                     await SendMessage("Некорректный параметр");
+
                 return;
             }
             case "category":
@@ -358,7 +359,7 @@ public class MessageHandler
                             variantsStr = $"Первые {variants.Count} из {gameCnt}";
                         else
                             variantsStr = $"Найдено {variants.Count} категорий";
-                        
+
                         variantsStr += $": " + string.Join(", ",
                             variants.Select(v => $"\"{v.Game.Name}\" ({v.Game.Id})"));
                     }
@@ -383,6 +384,31 @@ public class MessageHandler
                 {
                     await SendMessage($"Ошибка изменения категории: {ex.Message}");
                 }
+
+                break;
+            }
+            case "model":
+            {
+                if (!IsAdmin(messageUserId))
+                    return;
+
+                if (string.IsNullOrEmpty(command.ArgumentsAsString))
+                {
+                    await SendMessage($"Current model: '{gptWatcher.DialogueProcessor.GptClient.Model}'");
+                    return;
+                }
+
+                try
+                {
+                    await gptWatcher.DialogueProcessor.GptClient.SetModel(command.ArgumentsAsString);
+
+                    await SendMessage($"Model changed to '{command.ArgumentsAsString}'");
+                }
+                catch (Exception ex)
+                {
+                    await SendMessage($"Model {command.ArgumentsAsString} not found");
+                }
+
                 break;
             }
         }
