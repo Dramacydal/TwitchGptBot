@@ -25,5 +25,6 @@
     "user": "",
     "password": ""
   },
-  "streamlink": "streamlink"
+  "streamlink": "streamlink",
+  "message_process_period": 90
 }

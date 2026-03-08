@@ -401,6 +401,7 @@ public class MessageHandler
                 try
                 {
                     await gptWatcher.DialogueProcessor.GptClient.SetModel(command.ArgumentsAsString);
+                    await gptWatcher.MessagesProcessor.GptClient.SetModel(command.ArgumentsAsString);
 
                     await SendMessage($"Model changed to '{command.ArgumentsAsString}'");
                 }

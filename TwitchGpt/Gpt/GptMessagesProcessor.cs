@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using TwitchGpt.Config;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
@@ -19,6 +20,7 @@ public class GptMessagesProcessor : AbstractProcessor
 
     private GptMessagesProcessor(Bot bot, User channelUser) : base(bot, channelUser)
     {
+        ProcessPeriod = ConfigManager.GetPath<int>("message_process_period");
     }
 
     public static async Task<GptMessagesProcessor> Create(Bot bot, User channelUser)
@@ -31,8 +33,7 @@ public class GptMessagesProcessor : AbstractProcessor
 
     public void EnqueueChatMessage(ChatMessage message) => _messages.Push(message);
 
-    public int ProcessPeriod { get; set; } = 30;
-    // public int ProcessPeriod { get; set; } = 10;
+    public int ProcessPeriod { get; set; }
     
     public override async Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos)
     {
