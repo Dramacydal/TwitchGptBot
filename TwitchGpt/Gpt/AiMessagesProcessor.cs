@@ -17,6 +17,8 @@ public class AiMessagesProcessor
     public static int MaxMessageLogSize = 200;
 
     private DateTime _skipProcessingTime = DateTime.Now;
+    private int _incomingMessageCount = 0; // monotonically increasing, never trimmed
+    private int _lastSentIncomingCount = 0;
 
     private readonly Bot _bot;
 
@@ -58,6 +60,8 @@ public class AiMessagesProcessor
             Message = message.Message,
             IsBot = isBot,
         });
+        if (!isBot)
+            _incomingMessageCount++;
     }
 
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) =>
@@ -95,6 +99,14 @@ public class AiMessagesProcessor
                     DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
                     continue;
                 }
+                
+                if (_incomingMessageCount <= _lastSentIncomingCount)
+                {
+                    DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
+                    continue;
+                }
+                
+                _lastSentIncomingCount = _incomingMessageCount;
 
                 if (_messageLog.Count > MaxMessageLogSize)
                     _messageLog.RemoveRange(0, _messageLog.Count - MaxMessageLogSize);
@@ -261,6 +273,7 @@ public class AiMessagesProcessor
         using var _ = _messageLogLock.EnterScope();
         _messageLog.Clear();
         _directMessages.Clear();
+        _lastSentIncomingCount = 0;
         AiClient.Reset();
         DelayProcessing(TimeSpan.FromSeconds(0));
     }

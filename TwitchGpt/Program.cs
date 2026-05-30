@@ -25,7 +25,7 @@ internal abstract class Program
             var cliArgs = ParseCli(commandLineArgs);
             var dict = new Dictionary<string, string>();
 
-            if (cliArgs.TryGetValue("channel_config", out var configPath))
+            if (cliArgs.TryGetValue("channel-config", out var configPath))
             {
                 if (!File.Exists(configPath))
                     throw new FileNotFoundException($"Channel config file not found: {configPath}");
