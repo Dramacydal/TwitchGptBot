@@ -3,6 +3,7 @@ using BoostyLib;
 using Newtonsoft.Json.Linq;
 using TwitchGpt.Api;
 using TwitchGpt.Entities;
+using TwitchGpt.Gpt.Factories;
 
 namespace TwitchGpt;
 
@@ -92,6 +93,9 @@ internal abstract class Program
             Console.WriteLine("--channel argument is missing or not an integer.");
             return;
         }
+
+        if (namedArgs.TryGetString("roles-dir", out var rolesDir))
+            ModelFactory.RolesDir = rolesDir;
 
         var api = await CredentialsFactory.GetTwitchBotCredentials(botId);
 

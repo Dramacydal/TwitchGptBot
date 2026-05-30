@@ -68,9 +68,8 @@ public class Bot
 
         var user = response.Users.First();
 
-        _announcer = new Announcer(this, user);
-
         _messageHandler = await MessageHandler.Create(this, _credentials, user);
+        _announcer = new Announcer(this, user);
 
         await InitializeClient(user);
 
