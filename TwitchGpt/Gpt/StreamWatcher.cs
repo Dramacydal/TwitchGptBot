@@ -8,49 +8,50 @@ using TwitchLib.Api.Helix.Models.Users.GetUsers;
 
 namespace TwitchGpt.Gpt;
 
-public class GptWatcher
+public class StreamWatcher
 {
-    public GptMessagesProcessor MessagesProcessor { get; private init; }
-    public GptDialogueProcessor DialogueProcessor { get; private init; }
+    public AiMessagesProcessor MessagesProcessor { get; private init; }
 
     public void Reset()
     {
         MessagesProcessor.Reset();
-        DialogueProcessor.Reset();
     }
 
-    private TwitchStreamInfo _twitchStream = new();
+    private TwitchStreamInfo _twitchStreamInfo;
 
-    private BoostyStreamInfo _boostyStream = new();
+    private BoostyStreamInfo _boostyStreamInfo;
     
     private readonly Bot _bot;
     
     private readonly User _channelUser;
 
-    private GptWatcher(Bot bot, User channelUser)
+    private StreamWatcher(Bot bot, User channelUser)
     {
         _bot = bot;
         _channelUser = channelUser;
     }
 
-    public static async Task<GptWatcher> Create(Bot bot, User channelUser)
+    public static async Task<StreamWatcher> Create(Bot bot, User channelUser)
     {
-        return new GptWatcher(bot, channelUser)
+        var twitchStreamInfo = new TwitchStreamInfo();
+        var boostyStreamInfo = new BoostyStreamInfo();
+        
+        return new StreamWatcher(bot, channelUser)
         {
-            MessagesProcessor = await GptMessagesProcessor.Create(bot, channelUser),
-            DialogueProcessor = await GptDialogueProcessor.Create(bot, channelUser),
+            MessagesProcessor = await AiMessagesProcessor.Create(bot, channelUser, twitchStreamInfo, boostyStreamInfo),
+            _boostyStreamInfo = boostyStreamInfo,
+            _twitchStreamInfo = twitchStreamInfo,
         };
     }
 
     public async Task RunAsync(CancellationToken token)
     {
-        var t1 = MessagesProcessor.Run(token, _twitchStream, _boostyStream).ConfigureAwaitFalse();
-        var t2 = DialogueProcessor.Run(token, _twitchStream, _boostyStream).ConfigureAwaitFalse();
+        var t1 = MessagesProcessor.Run(token).ConfigureAwaitFalse();
 
-        var t3 = TwitchStreamChecker(token).ConfigureAwaitFalse();
-        var t4 = BoostyStreamChecker(token).ConfigureAwaitFalse();
+        var t2 = TwitchStreamChecker(token).ConfigureAwaitFalse();
+        var t3 = BoostyStreamChecker(token).ConfigureAwaitFalse();
 
-        await Task.WhenAll(t1, t2, t3, t4);
+        await Task.WhenAll(t1, t2, t3);
     }
 
     private async Task TwitchStreamChecker(CancellationToken token)
@@ -65,11 +66,11 @@ public class GptWatcher
 
             try
             {
-                if (_twitchStream.AvailableBttvEmotes == null)
+                if (_twitchStreamInfo.AvailableBttvEmotes == null)
                 {
                     try
                     {
-                        _twitchStream.AvailableBttvEmotes = await LoadBetterTtvEmotes();
+                        _twitchStreamInfo.AvailableBttvEmotes = await LoadBetterTtvEmotes();
                     }
                     catch (Exception ex)
                     {
@@ -81,9 +82,9 @@ public class GptWatcher
                     api.Helix.Streams.GetStreamsAsync(userLogins: [_channelUser.Login]));
                 if (streams.Streams.Length > 0)
                 {
-                    _twitchStream.Online = true;
+                    _twitchStreamInfo.Online = true;
                     var stream = streams.Streams[0];
-                    _twitchStream.Stream = stream;
+                    _twitchStreamInfo.Stream = stream;
 
                     var fileName = "temp_twitch.jpg";
                     await SnapshotHelper.TakeTwitchSnapshot(_channelUser.Login, fileName);
@@ -94,12 +95,12 @@ public class GptWatcher
                     // var jpgName = Path.ChangeExtension(fileName, "jpg");
                     // await img.SaveAsync(jpgName);
 
-                    _twitchStream.AddSnapShot(FileSourceInfo.FromFilePath(fileName));
+                    _twitchStreamInfo.AddSnapShot(FileSourceInfo.FromFilePath(fileName));
                 }
                 else
                 {
-                    _twitchStream.Online = false;
-                    _twitchStream.SnapShots.Clear();
+                    _twitchStreamInfo.Online = false;
+                    _twitchStreamInfo.SnapShots.Clear();
                 }
             }
             catch (Exception ex)
@@ -138,7 +139,7 @@ public class GptWatcher
                 {
                     var playerData = stream.VideoStreamData[0].PlayerUrls.FirstOrDefault(p => p.Type == "live_hls");
                     if (playerData == null || playerData.Url == null)
-                        _boostyStream.Online = false;
+                        _boostyStreamInfo.Online = false;
                     else
                     {
                         var fileName = "temp_boosty.jpg";
@@ -154,13 +155,13 @@ public class GptWatcher
                         var jpgName = Path.ChangeExtension(fileName, "jpg");
                         await img.SaveAsync(jpgName);
 
-                        _boostyStream.AddSnapShot(FileSourceInfo.FromFilePath(jpgName));
-                        _boostyStream.Stream = stream;
-                        _boostyStream.Online = true;
+                        _boostyStreamInfo.AddSnapShot(FileSourceInfo.FromFilePath(jpgName));
+                        _boostyStreamInfo.Stream = stream;
+                        _boostyStreamInfo.Online = true;
                     }
                 }
                 else
-                    _boostyStream.Online = false;
+                    _boostyStreamInfo.Online = false;
             }
             catch (Exception ex)
             {
@@ -198,5 +199,5 @@ public class GptWatcher
         return emotes;
     }
 
-    protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
+    protected ILogger Logger => Logging.Logger.Instance(nameof(StreamWatcher));
 }

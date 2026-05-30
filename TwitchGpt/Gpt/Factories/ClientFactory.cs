@@ -3,7 +3,7 @@ using TwitchGpt.Database.Mappers;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 
-namespace TwitchGpt.Gpt;
+namespace TwitchGpt.Gpt.Factories;
 
 public static class ClientFactory
 {
@@ -11,7 +11,7 @@ public static class ClientFactory
     
     private static List<string>? _geminiTokens;
 
-    private static readonly ConcurrentDictionary<ClientType, Client> clients = new();
+    private static readonly ConcurrentDictionary<ClientType, AiClient> clients = new();
 
     private static async Task<List<string>> GetOpenRouterKeysAsync()
     {
@@ -30,12 +30,12 @@ public static class ClientFactory
         return _defaultRole!;
     }
 
-    public static async Task<Client> CreateClient(ClientType type)
+    public static async Task<AiClient> CreateClient(ClientType type, string actorName)
     {
         // if (clients.TryGetValue(type, out var client))
         //     return client;
 
-        var client = await Client.Create(type, await GetOpenRouterKeysAsync());
+        var client = await AiClient.Create(type, actorName, await GetOpenRouterKeysAsync());
         clients[type] = client;
 
         if (type == ClientType.ChatWatcher)

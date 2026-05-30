@@ -1,5 +1,4 @@
 ﻿using NLog;
-using TwitchGpt.Gpt.Entities;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 
 namespace TwitchGpt.Gpt.Abstraction;
@@ -22,9 +21,9 @@ public abstract class AbstractProcessor
 
     protected bool IsProcessingDelayed => _skipProcessingTime > DateTime.Now;
 
-    public abstract Client GptClient { get; protected set; }
+    public abstract AiClient AiClient { get; protected set; }
 
-    public abstract Task Run(CancellationToken token, params AbstractStreamInfo?[] streamInfos);
+    public abstract Task Run(CancellationToken token);
 
     public static int SnapshotHistoryCount = 3;
 
@@ -44,7 +43,7 @@ public abstract class AbstractProcessor
         }
     }
 
-    protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
+    protected ILogger Logger => Logging.Logger.Instance(nameof(StreamWatcher));
 
     public virtual void Reset()
     {

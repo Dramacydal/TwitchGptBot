@@ -2,7 +2,7 @@
 using TwitchGpt.Database.Mappers;
 using TwitchGpt.Gpt.Entities;
 
-namespace TwitchGpt.Gpt;
+namespace TwitchGpt.Gpt.Factories;
 
 public class ModelFactory
 {

@@ -22,10 +22,7 @@ public class Bot
     private readonly string _channelId;
     private bool _dryRun;
 
-    private GptWatcher _gptHandler;
-
     private Announcer _announcer;
-
 
     private Bot(TwitchApiCredentials credentials, string channelId)
     {
@@ -60,7 +57,7 @@ public class Bot
 
     public TwitchClient Client => _client;
 
-    private Task? _gptTask;
+    private Task? _messageHandlerTask;
     private Task? _announcerTask;
 
     public async Task Start()
@@ -71,21 +68,20 @@ public class Bot
 
         var user = response.Users.First();
 
-        _gptHandler = await GptWatcher.Create(this, user);
         _announcer = new Announcer(this, user);
 
         _messageHandler = await MessageHandler.Create(this, _credentials, user);
 
         await InitializeClient(user);
 
-        _gptTask = _gptHandler.RunAsync(cts.Token);
+        _messageHandlerTask = _messageHandler.RunAsync(cts.Token);
         _announcerTask = _announcer.RunAsync(cts.Token);
     }
 
     public async Task WaitForCompletion()
     {
-        if (_gptTask != null)
-            await _gptTask;
+        if (_messageHandlerTask != null)
+            await _messageHandlerTask;
         if (_announcerTask != null)
             await _announcerTask;
     }
@@ -128,7 +124,7 @@ public class Bot
         {
             try
             {
-                await _messageHandler?.HandleMessage(args.ChatMessage, _gptHandler);
+                await _messageHandler?.HandleMessage(args.ChatMessage);
             }
             catch (Exception ex)
             {
@@ -139,7 +135,7 @@ public class Bot
         {
             try
             {
-                await _messageHandler?.HandleCommand(args.Command, args.ChatMessage, _gptHandler);
+                await _messageHandler?.HandleCommand(args.Command, args.ChatMessage);
             }
             catch (Exception ex)
             {
@@ -157,14 +153,6 @@ public class Bot
         };
         
         await _client.ConnectAsync();
-    }
-
-    private async Task SomeTask()
-    {
-        for (; !cts.Token.IsCancellationRequested;)
-        {
-            await Task.Delay(500);
-        }
     }
 
     private ILogger Logger => Logging.Logger.Instance(_credentials.ApiUserName);

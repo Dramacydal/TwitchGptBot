@@ -2,7 +2,7 @@
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 
-namespace TwitchGpt.Gpt;
+namespace TwitchGpt.Gpt.Factories;
 
 public static class HistoryFactory
 {

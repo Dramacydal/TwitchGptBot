@@ -1,10 +1,8 @@
 ﻿using System.Text.RegularExpressions;
 using BoostyLib;
+using Newtonsoft.Json.Linq;
 using TwitchGpt.Api;
-using TwitchGpt.Database.Mappers;
 using TwitchGpt.Entities;
-using TwitchGpt.Gpt;
-using TwitchGpt.Gpt.Enums;
 
 namespace TwitchGpt;
 
@@ -12,8 +10,10 @@ internal abstract class Program
 {
     class RunParams
     {
+        private const string DebugConfigPath = "debug_config.json";
+
         private Dictionary<string, string> _args = new();
-        
+
         public RunParams(string[] args)
         {
             foreach (var arg in args)
@@ -23,12 +23,35 @@ internal abstract class Program
                     continue;
 
                 _args[m.Groups[1].Value] = m.Groups[2].Value;
-            }            
+            }
+        }
+
+        private RunParams(Dictionary<string, string> args)
+        {
+            _args = args;
+        }
+
+        public static RunParams Load(string[] commandLineArgs)
+        {
+            if (!File.Exists(DebugConfigPath))
+                return new RunParams(commandLineArgs);
+
+            Console.WriteLine($"[Debug] Loading run params from {DebugConfigPath}");
+
+            var obj = JObject.Parse(File.ReadAllText(DebugConfigPath));
+            var dict = obj.Properties()
+                .Where(p => p.Value.Type != JTokenType.Null)
+                .ToDictionary(p => p.Name, p => p.Value.ToString());
+
+            return new RunParams(dict);
         }
 
         public bool TryGetString(string key, out string? value)
         {
-            return _args.TryGetValue(key, out value);
+            if (_args.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+                return true;
+            value = null;
+            return false;
         }
 
         public bool TryGetInt(string key, out int value)
@@ -36,17 +59,17 @@ internal abstract class Program
             value = 0;
             return _args.TryGetValue(key, out var strVal) && int.TryParse(strVal, out value);
         }
-        
+
         public bool TryGetBool(string key, out bool value)
         {
             value = false;
             return _args.TryGetValue(key, out var strVal) && bool.TryParse(strVal, out value);
         }
     }
-    
+
     public static async Task Main(string[] args)
     {
-        var namedArgs = new RunParams(args);
+        var namedArgs = RunParams.Load(args);
         if (!namedArgs.TryGetString("bot", out var strBot))
         {
             Console.WriteLine("--bot argument is missing.");

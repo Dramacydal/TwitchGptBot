@@ -6,22 +6,21 @@ using TwitchGpt.Config;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
+using TwitchGpt.Gpt.Factories;
 
 namespace TwitchGpt.Gpt;
 
-public class Client
+public class AiClient
 {
     private readonly List<Tuple<int, OpenRouterClient>> _aiPool = new();
 
     private int _poolIndex = 0;
     
-    public RoleModel? Role { get; set; }
+    public string ActorName { get; private init; }
     
-    public ClientType ClientType { get; private set; }
-
+    public required RoleModel Role { get; set; }
+    
     public HistoryHolder HistoryHolder { get; private set; } = new();
-
-    public bool IsBusy { get; set; }
 
     public int ProviderHash => _aiPool[_poolIndex].Item1;
 
@@ -77,7 +76,11 @@ public class Client
 
     private string GetPreparedInstructions()
     {
-        return string.Join("\r\n", Role.Instructions.Split("\n")
+        var instructions = Role.Instructions;
+
+        instructions = instructions.Replace("{bot_name}", ActorName);
+        
+        return string.Join("\r\n", instructions.Split("\n")
             .Select(l => l.Trim())
             .Where(l => !l.StartsWith("#"))
         );
@@ -105,7 +108,7 @@ public class Client
         });
     }
 
-    private Client(IEnumerable<string> tokenPool)
+    private AiClient(IEnumerable<string> tokenPool)
     {
         foreach (var token in tokenPool)
         {
@@ -117,10 +120,11 @@ public class Client
         }
     }
 
-    public static async Task<Client> Create(ClientType type, IEnumerable<string> tokenPool, RoleModel? role = null)
+    public static async Task<AiClient> Create(ClientType type, string actorName, IEnumerable<string> tokenPool, RoleModel? role = null)
     {
-        return new Client(tokenPool)
+        return new AiClient(tokenPool)
         {
+            ActorName = actorName,
             HistoryHolder = HistoryFactory.Create(type),
             Role = role ?? await ClientFactory.GetDefaultRole()
         };
@@ -215,7 +219,7 @@ public class Client
         }
     }
 
-    protected ILogger Logger => Logging.Logger.Instance(nameof(GptWatcher));
+    protected ILogger Logger => Logging.Logger.Instance(nameof(StreamWatcher));
 
     public void Reset()
     {

@@ -1,0 +1,9 @@
+{
+  "bot": 1,
+  "channel": 0,
+  "boosty-channel": "",
+  "boosty-api-name": "",
+  "messages-to-log": false,
+  "watch": 1,
+  "dialogs": 1
+}
