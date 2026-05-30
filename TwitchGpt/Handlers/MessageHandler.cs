@@ -4,7 +4,6 @@ using TwitchGpt.Config;
 using TwitchGpt.Database.Mappers;
 using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
-using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Factories;
 using TwitchLib.Api.Helix.Models.Channels.ModifyChannelInformation;
@@ -279,11 +278,11 @@ public class MessageHandler
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
-                    await SendMessage($"Количество: {AbstractProcessor.SnapshotHistoryCount}");
+                    await SendMessage($"Количество: {AiMessagesProcessor.SnapshotHistoryCount}");
                 else if (uint.TryParse(command.ArgumentsAsString, out var value))
                 {
-                    AbstractProcessor.SnapshotHistoryCount = (int)Math.Clamp(value, 1, 10);
-                    await SendMessage($"Количество установлено в {AbstractProcessor.SnapshotHistoryCount}");
+                    AiMessagesProcessor.SnapshotHistoryCount = (int)Math.Clamp(value, 1, 10);
+                    await SendMessage($"Количество установлено в {AiMessagesProcessor.SnapshotHistoryCount}");
                     return;
                 }
                 else

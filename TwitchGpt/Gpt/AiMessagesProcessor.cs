@@ -1,7 +1,7 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
+using NLog;
 using TwitchGpt.Config;
 using TwitchGpt.Exceptions;
-using TwitchGpt.Gpt.Abstraction;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 using TwitchGpt.Gpt.Factories;
@@ -11,17 +11,28 @@ using TwitchLib.Client.Models;
 
 namespace TwitchGpt.Gpt;
 
-public class AiMessagesProcessor : AbstractProcessor
+public class AiMessagesProcessor
 {
-    public override AiClient AiClient { get; protected set; }
+    public static int SnapshotHistoryCount = 3;
+
+    private DateTime _skipProcessingTime = DateTime.Now;
+
+    private readonly Bot _bot;
+
+    private readonly User _channelUser;
+
+    public AiClient AiClient { get; private set; }
 
     private ConcurrentStack<ChatMessageData> _messageLog = new();
-    
+
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _directMessages = new();
-    
+
     public AbstractStreamInfo?[] _streamInfos;
-    private AiMessagesProcessor(Bot bot, User channelUser) : base(bot, channelUser)
+
+    private AiMessagesProcessor(Bot bot, User channelUser)
     {
+        _bot = bot;
+        _channelUser = channelUser;
         ProcessPeriod = ConfigManager.GetPath<int>("message_process_period");
     }
 
@@ -30,7 +41,7 @@ public class AiMessagesProcessor : AbstractProcessor
         return new AiMessagesProcessor(bot, channelUser)
         {
             AiClient = await ClientFactory.CreateClient(ClientType.ChatWatcher, bot.BotUserName),
-            _streamInfos =  streamInfos
+            _streamInfos = streamInfos
         };
     }
 
@@ -41,17 +52,19 @@ public class AiMessagesProcessor : AbstractProcessor
         Message = message.Message,
         IsBot = isBot,
     });
-    
-    public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) => _directMessages.Enqueue(new (text, chatMessage, role));
+
+    public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) =>
+        _directMessages.Enqueue(new(text, chatMessage, role));
 
     public int ProcessPeriod { get; set; }
-    
-    public override async Task Run(CancellationToken token)
-    {
-        var t1 = RunMessageWatcher(token);
-        var t2 = RunDialogueWatcher(token);
 
-        await Task.WhenAll(t1, t2);
+    protected void DelayProcessing(TimeSpan delay) => _skipProcessingTime = DateTime.Now.Add(delay);
+
+    protected bool IsProcessingDelayed => _skipProcessingTime > DateTime.Now;
+
+    public async Task Run(CancellationToken token)
+    {
+        await Task.WhenAll(RunMessageWatcher(token), RunReplyWatcher(token));
     }
 
     private async Task RunMessageWatcher(CancellationToken token)
@@ -81,14 +94,14 @@ public class AiMessagesProcessor : AbstractProcessor
 
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
-                
+
                 var res = await AiClient.Ask(formatted);
                 if (string.IsNullOrWhiteSpace(res))
                     throw new UnknownGeminiException("Response text is empty");
 
                 Logger.Warn(res);
 
-                await Respond(res);
+                await SendMessage(res);
 
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
             }
@@ -127,9 +140,9 @@ public class AiMessagesProcessor : AbstractProcessor
         Logger.Info($"{nameof(RunMessageWatcher)} stopped");
     }
 
-    private async Task RunDialogueWatcher(CancellationToken token)
+    private async Task RunReplyWatcher(CancellationToken token)
     {
-        Logger.Info($"{nameof(RunDialogueWatcher)} started");
+        Logger.Info($"{nameof(RunReplyWatcher)} started");
         for (; !token.IsCancellationRequested;)
         {
             if (MessageHandler.IsSuspended || IsProcessingDelayed)
@@ -145,7 +158,7 @@ public class AiMessagesProcessor : AbstractProcessor
             }
 
             var (text, chatMessage, role) = payload;
-            
+
             Logger.Debug($"Answering direct message from {chatMessage.Username}: {text}");
 
             var currentProviderHash = AiClient.ProviderHash;
@@ -179,13 +192,11 @@ public class AiMessagesProcessor : AbstractProcessor
             }
             catch (UnknownGeminiException ex)
             {
-                Logger.Error(
-                    $"Unknown gemini error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
+                Logger.Error($"Unknown gemini error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
             }
             catch (SafetyException ex)
             {
-                Logger.Error(
-                    $"Safety error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
+                Logger.Error($"Safety error for user \"{chatMessage.Username}\" \"{text}\": {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -194,23 +205,33 @@ public class AiMessagesProcessor : AbstractProcessor
                 Logger.Error($"{ex.GetType()}: {ex.Message}");
             }
         }
-        
-        Logger.Info($"{nameof(RunDialogueWatcher)} stopped");
+
+        Logger.Info($"{nameof(RunReplyWatcher)} stopped");
     }
 
-    private async Task Respond(string text)
-    {
-        await SendMessage(text);
-    }
-    
-    public override void Reset()
+    public void Reset()
     {
         _messageLog.Clear();
         _directMessages.Clear();
         AiClient.Reset();
-        
-        base.Reset();
-        
         DelayProcessing(TimeSpan.FromSeconds(0));
     }
+
+    private async Task SendMessage(string text)
+    {
+        try
+        {
+            if (_bot.IsDryDun())
+                Logger.Trace($">> {text}");
+            else
+                await _bot.Client.SendMessageAsync(_channelUser.Login, text);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Error sending chat message: {ex.Message}");
+            Logger.Error(text);
+        }
+    }
+
+    private ILogger Logger => Logging.Logger.Instance(nameof(AiMessagesProcessor));
 }
