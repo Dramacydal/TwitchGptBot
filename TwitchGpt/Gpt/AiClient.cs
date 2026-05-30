@@ -140,8 +140,6 @@ public class AiClient
         // if (!await WaitHelper.WaitUntil(() => !IsBusy, TimeSpan.FromSeconds(2)))
         //     throw new ClientBusyException();
 
-        // using var ctx = new DisposableContext(() => IsBusy = true, () => IsBusy = false);
-
         var now = DateTime.Now;
 
         try

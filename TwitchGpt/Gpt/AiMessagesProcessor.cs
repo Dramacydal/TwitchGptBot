@@ -23,7 +23,7 @@ public class AiMessagesProcessor
 
     public AiClient AiClient { get; private set; }
 
-    private ConcurrentStack<ChatMessageData> _messageLog = new();
+    private ConcurrentQueue<ChatMessageData> _messageLog = new();
 
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _directMessages = new();
 
@@ -45,7 +45,7 @@ public class AiMessagesProcessor
         };
     }
 
-    public void AddMessageToLog(ChatMessage message, bool isBot = false) => _messageLog.Push(new()
+    public void AddMessageToLog(ChatMessage message, bool isBot = false) => _messageLog.Enqueue(new()
     {
         Date = message.TmiSent,
         UserName = message.Username,
