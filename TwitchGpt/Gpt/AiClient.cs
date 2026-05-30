@@ -130,24 +130,21 @@ public class AiClient
         };
     }
 
-    public async Task<string?> Ask(string question, params AbstractStreamInfo?[] streamInfos)
+    public async Task<string?> Ask(string question, AbstractStreamInfo?[]? streamInfos = null, bool useHistory = true)
     {
-        return await Ask<string>(question, streamInfos);
+        return await Ask<string>(question, streamInfos, useHistory);
     }
 
-    public async Task<T?> Ask<T>(string question, params AbstractStreamInfo?[] streamInfos) where T : class
+    public async Task<T?> Ask<T>(string question, AbstractStreamInfo?[]? streamInfos = null, bool useHistory = true) where T : class
     {
-        // if (!await WaitHelper.WaitUntil(() => !IsBusy, TimeSpan.FromSeconds(2)))
-        //     throw new ClientBusyException();
-
         var now = DateTime.Now;
 
         try
         {
-            var historyEntries = HistoryHolder.CopyEntries();
-            
-            PrependStreamInfos(historyEntries, streamInfos);
-            
+            var historyEntries = useHistory ? HistoryHolder.CopyEntries() : [];
+
+            PrependStreamInfos(historyEntries, streamInfos ?? []);
+
             PrependInstructions(historyEntries);
 
             var request = CreateChatCompletionRequest();
@@ -163,13 +160,13 @@ public class AiClient
                 var answerText = response.Choices[0].Message.Content?.ToString() ?? "";
                 res = (T)(object)answerText;
 
-                HistoryHolder.AddEntries([Message.FromUser(question), Message.FromAssistant(answerText)]);
+                if (useHistory)
+                    HistoryHolder.AddEntries([Message.FromUser(question), Message.FromAssistant(answerText)]);
             }
             else
                 throw new Exception("Not implemented yet");
 
             Logger.Info($"GPT request process in {(DateTime.Now - now).TotalSeconds}");
-
 
             return res;
         }

@@ -84,24 +84,50 @@ public class AiMessagesProcessor
                 continue;
             }
 
-            var formatted = string.Join("\r\n", _messageLog.Select(_ => $"[{_.Date:yyyy-MM-dd HH:mm:ss}] [{_.UserName}]: {_.Message}"));
+            var allMessages = _messageLog.ToList();
+            var lastBotIndex = allMessages.FindLastIndex(m => m.IsBot);
+
+            var contextMessages = lastBotIndex >= 0 ? allMessages.Take(lastBotIndex + 1).ToList() : [];
+            var newMessages = lastBotIndex >= 0 ? allMessages.Skip(lastBotIndex + 1).ToList() : allMessages;
+
+            if (newMessages.Count == 0)
+            {
+                DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
+                continue;
+            }
+
+            static string FormatMessage(ChatMessageData m) => $"[{m.Date:yyyy-MM-dd HH:mm:ss}] [{m.UserName}]: {m.Message}";
+
+            var formatted = contextMessages.Count > 0
+                ? $"Контекст (уже обработано, не реагируй):\r\n{string.Join("\r\n", contextMessages.Select(FormatMessage))}\r\n\r\nНовые сообщения (только на них реагируй):\r\n{string.Join("\r\n", newMessages.Select(FormatMessage))}"
+                : string.Join("\r\n", newMessages.Select(FormatMessage));
 
             var currentProviderHash = AiClient.ProviderHash;
             try
             {
-                if (AiClient.HistoryHolder.Count() > 100)
-                    AiClient.HistoryHolder.Reset();
-
                 Logger.Warn(formatted);
                 Logger.Warn("---------");
 
-                var res = await AiClient.Ask(formatted);
+                var res = await AiClient.Ask(formatted, _streamInfos, useHistory: false);
                 if (string.IsNullOrWhiteSpace(res))
                     throw new UnknownGeminiException("Response text is empty");
 
                 Logger.Warn(res);
 
-                await SendMessage(res);
+                res = string.Join(" ", res.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()));
+
+                if (!res.Trim().Equals("PASS", StringComparison.OrdinalIgnoreCase))
+                {
+                    await SendMessage(res);
+
+                    _messageLog.Enqueue(new ChatMessageData
+                    {
+                        Date = DateTimeOffset.Now,
+                        UserName = AiClient.ActorName,
+                        Message = res,
+                        IsBot = true,
+                    });
+                }
 
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
             }
@@ -164,7 +190,7 @@ public class AiMessagesProcessor
             var currentProviderHash = AiClient.ProviderHash;
             try
             {
-                var responseText = await AiClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", _streamInfos);
+                var responseText = await AiClient.Ask($"Ответь на сообщение из чата:\r\n[{chatMessage.Username}]: {text}", _streamInfos, useHistory: true);
                 if (string.IsNullOrWhiteSpace(responseText))
                     throw new UnknownGeminiException("Response text is empty");
 
