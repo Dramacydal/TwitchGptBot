@@ -23,7 +23,8 @@ public class AiMessagesProcessor
 
     public AiClient AiClient { get; private set; }
 
-    private ConcurrentQueue<ChatMessageData> _messageLog = new();
+    private readonly List<ChatMessageData> _messageLog = new();
+    private readonly Lock _messageLogLock = new();
 
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _directMessages = new();
 
@@ -45,13 +46,17 @@ public class AiMessagesProcessor
         };
     }
 
-    public void AddMessageToLog(ChatMessage message, bool isBot = false) => _messageLog.Enqueue(new()
+    public void AddMessageToLog(ChatMessage message, bool isBot = false)
     {
-        Date = message.TmiSent,
-        UserName = message.Username,
-        Message = message.Message,
-        IsBot = isBot,
-    });
+        using var _ = _messageLogLock.EnterScope();
+        _messageLog.Add(new()
+        {
+            Date = message.TmiSent.ToLocalTime(),
+            UserName = message.Username,
+            Message = message.Message,
+            IsBot = isBot,
+        });
+    }
 
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) =>
         _directMessages.Enqueue(new(text, chatMessage, role));
@@ -78,13 +83,21 @@ public class AiMessagesProcessor
                 continue;
             }
 
-            if (_messageLog.Count == 0)
+            List<ChatMessageData> allMessages;
+            int botInsertIndex;
+
+            using (_messageLogLock.EnterScope())
             {
-                DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
-                continue;
+                if (_messageLog.Count == 0)
+                {
+                    DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
+                    continue;
+                }
+
+                allMessages = _messageLog.ToList();
+                botInsertIndex = allMessages.Count;
             }
 
-            var allMessages = _messageLog.ToList();
             var lastBotIndex = allMessages.FindLastIndex(m => m.IsBot);
 
             var contextMessages = lastBotIndex >= 0 ? allMessages.Take(lastBotIndex + 1).ToList() : [];
@@ -120,13 +133,16 @@ public class AiMessagesProcessor
                 {
                     await SendMessage(res);
 
-                    _messageLog.Enqueue(new ChatMessageData
+                    using (_messageLogLock.EnterScope())
                     {
-                        Date = DateTimeOffset.Now,
-                        UserName = AiClient.ActorName,
-                        Message = res,
-                        IsBot = true,
-                    });
+                        _messageLog.Insert(botInsertIndex, new ChatMessageData
+                        {
+                            Date = DateTimeOffset.Now,
+                            UserName = AiClient.ActorName,
+                            Message = res,
+                            IsBot = true,
+                        });
+                    }
                 }
 
                 DelayProcessing(TimeSpan.FromSeconds(ProcessPeriod));
@@ -237,6 +253,7 @@ public class AiMessagesProcessor
 
     public void Reset()
     {
+        using var _ = _messageLogLock.EnterScope();
         _messageLog.Clear();
         _directMessages.Clear();
         AiClient.Reset();

@@ -24,6 +24,7 @@ public class AiClient
 
     public int ProviderHash => _aiPool[_poolIndex].Item1;
 
+    // public string Model { get; private set; } = "google/gemini-2.5-flash-lite";
     public string Model { get; private set; } = "google/gemini-2.5-flash-lite";
     
     private List<ModelInfo>? _modelInfos;
