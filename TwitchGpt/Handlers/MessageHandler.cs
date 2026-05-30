@@ -79,31 +79,49 @@ public class MessageHandler
             _streamWatcher.MessagesProcessor.AddMessageToLog(args);
     }
 
-    public static bool IsSuspended { get; private set; }
+    public static bool IsSuspended { get; set; }
 
-    public async Task HandleCommand(CommandInfo command, ChatMessage msg)
+    public class BotCommandInfo
+    {
+        public string Name { get; set; }
+
+        public List<string> ArgumentsAsList { get; set; } = [];
+
+        public string ArgumentsAsString => string.Join(" ", ArgumentsAsList);
+    }
+
+    public class CommandContext
+    {
+        public string UserId { get; set; }
+        public string UserName { get; set; }
+        public Func<string, Task> Respond { get; set; }
+    }
+    
+    public async Task HandleCommand(BotCommandInfo command, CommandContext msg)
     {
         if (IsSuspended && command.Name != "suspend")
             return;
 
         var messageUserId = msg.UserId;
-        if (IsIgnoredUser(messageUserId) && command.Name != "ignoreme")
+        if (!string.IsNullOrEmpty(messageUserId) && IsIgnoredUser(messageUserId) && command.Name != "ignoreme")
             return;
+        
+        var isAdmin = () => string.IsNullOrEmpty(messageUserId) || IsAdmin(messageUserId);
 
         switch (command.Name)
         {
             case "suspend":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 IsSuspended = !IsSuspended;
-                await SendReply(msg, "Бот " + (IsSuspended ? "приостановлен" : "запущен"));
+                await msg.Respond("Бот " + (IsSuspended ? "приостановлен" : "запущен"));
                 break;
             }
             case "reset":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 _streamWatcher.Reset();
@@ -112,25 +130,25 @@ public class MessageHandler
             }
             case "role":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
                 {
-                    await SendMessage($"Current role: '{_role.Name}'");
+                    await msg.Respond($"Current role: '{_role.Name}'");
                     return;
                 }
 
                 if (await SetRole(command.ArgumentsAsString))
-                    await SendMessage($"Role changed to '{command.ArgumentsAsString}'");
+                    await msg.Respond($"Role changed to '{command.ArgumentsAsString}'");
                 else
-                    await SendMessage($"Role not found");
+                    await msg.Respond($"Role not found");
 
                 break;
             }
             case "reload":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 await ModelFactory.Reload();
@@ -142,7 +160,7 @@ public class MessageHandler
             // case "safety":
             // case "ss":
             // {
-            //     if (!IsAdmin(messageUserId))
+            //     if (!isAdmin())
             //         return;
             //
             //     await SendMessage("SS: " + JsonSerializer.Serialize(_role.SafetySettings));
@@ -158,9 +176,9 @@ public class MessageHandler
                 {
                     var user = await ResolveUser(userNameOrId);
                     if (user != null)
-                        await SendReply(msg, $"'{user.DisplayName}' ('{user.Login}', {user.Id})");
+                        await msg.Respond($"'{user.DisplayName}' ('{user.Login}', {user.Id})");
                     else
-                        await SendReply(msg, "Пользователь не найден");
+                        await msg.Respond($"Пользователь {userNameOrId} не найден");
                 }
                 catch (Exception ex)
                 {
@@ -171,26 +189,26 @@ public class MessageHandler
             }
             case "togglewatch":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 _messageWatchEnabled = !_messageWatchEnabled;
                 if (_streamWatcher.MessagesProcessor.ProcessPeriod <= 0)
                     _streamWatcher.MessagesProcessor.ProcessPeriod = 25;
 
-                await SendMessage($"Реакция на чат каждые {_streamWatcher.MessagesProcessor.ProcessPeriod} сек " +
+                await msg.Respond($"Реакция на чат каждые {_streamWatcher.MessagesProcessor.ProcessPeriod} сек " +
                                   (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
             }
             case "watchperiod":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString) ||
                     !int.TryParse(command.ArgumentsAsString, out var period))
                 {
-                    await SendMessage($"Реакция на чат каждые {_streamWatcher.MessagesProcessor.ProcessPeriod} сек " +
+                    await msg.Respond($"Реакция на чат каждые {_streamWatcher.MessagesProcessor.ProcessPeriod} сек " +
                                       (_messageWatchEnabled ? "ON" : "OFF"));
                     return;
                 }
@@ -206,21 +224,21 @@ public class MessageHandler
 
                 _streamWatcher.MessagesProcessor.ProcessPeriod = period;
 
-                await SendMessage($"Реакция на чат каждые {period} сек " + (_messageWatchEnabled ? "ON" : "OFF"));
+                await msg.Respond($"Реакция на чат каждые {period} сек " + (_messageWatchEnabled ? "ON" : "OFF"));
                 break;
             }
             case "toggledialog":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 _dialogsEnabled = !_dialogsEnabled;
-                await SendMessage($"Диалоги " + (_dialogsEnabled ? "ON" : "OFF"));
+                await msg.Respond($"Диалоги " + (_dialogsEnabled ? "ON" : "OFF"));
                 break;
             }
             case "ignore":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
@@ -229,25 +247,27 @@ public class MessageHandler
                 var user = await ResolveUser(command.ArgumentsAsString);
                 if (user == null)
                 {
-                    await SendMessage("Пользователь не найдет");
+                    await msg.Respond("Пользователь не найдет");
                     return;
                 }
 
                 IgnoreUser(user.Id, user.Login);
-                await SendMessage($"Пользователь '{user.Login}' игнорируется");
+                await msg.Respond($"Пользователь '{user.Login}' игнорируется");
                 break;
             }
             case "ignoreme":
             {
-                if (ToggleIgnore(msg.UserId, msg.Username))
-                    await SendReply(msg.Username, "теперь буду тебя игнорировать!");
+                if (string.IsNullOrEmpty(msg.UserId))
+                    break;
+                if (ToggleIgnore(msg.UserId, msg.UserName))
+                    await msg.Respond($"@{msg.UserName} теперь буду тебя игнорировать!");
                 else
-                    await SendReply(msg.Username, "больше не буду тебя игнорировать!");
+                    await msg.Respond($"@{msg.UserName}больше не буду тебя игнорировать!");
                 break;
             }
             case "unignore":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
@@ -256,14 +276,14 @@ public class MessageHandler
                 var user = await ResolveUser(command.ArgumentsAsString);
                 if (user == null)
                 {
-                    await SendMessage("Пользователь не найдет");
+                    await msg.Respond("Пользователь не найдет");
                     return;
                 }
 
                 try
                 {
                     UnIgnoreUser(user);
-                    await SendMessage($"Пользователь '{user.Login}' больше не игнорируется");
+                    await msg.Respond($"Пользователь '{user.Login}' больше не игнорируется");
                 }
                 catch (Exception ex)
                 {
@@ -274,25 +294,25 @@ public class MessageHandler
             }
             case "snapshotcount":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
-                    await SendMessage($"Количество: {AiMessagesProcessor.SnapshotHistoryCount}");
+                    await msg.Respond($"Количество: {AiMessagesProcessor.SnapshotHistoryCount}");
                 else if (uint.TryParse(command.ArgumentsAsString, out var value))
                 {
                     AiMessagesProcessor.SnapshotHistoryCount = (int)Math.Clamp(value, 1, 10);
-                    await SendMessage($"Количество установлено в {AiMessagesProcessor.SnapshotHistoryCount}");
+                    await msg.Respond($"Количество установлено в {AiMessagesProcessor.SnapshotHistoryCount}");
                     return;
                 }
                 else
-                    await SendMessage("Некорректный параметр");
+                    await msg.Respond("Некорректный параметр");
 
                 return;
             }
             case "category":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (command.ArgumentsAsList.Count < 2)
@@ -307,7 +327,7 @@ public class MessageHandler
                 var games = LookupGames(gameNamePart).ToList();
                 if (games.Count == 0)
                 {
-                    await SendMessage("Категория не найдена");
+                    await msg.Respond("Категория не найдена");
                     return;
                 }
 
@@ -333,7 +353,7 @@ public class MessageHandler
                             variants.Select(v => $"\"{v.Game.Name}\" ({v.Game.Id})"));
                     }
 
-                    await SendMessage(string.Join(", ",
+                    await msg.Respond(string.Join(", ",
                         new[] { exactStr, variantsStr }.Where(s => !string.IsNullOrEmpty(s))));
                     return;
                 }
@@ -347,23 +367,23 @@ public class MessageHandler
                         {
                             GameId = game.Id
                         }));
-                    await SendMessage($"Категория изменена на \"{game.Name}\"");
+                    await msg.Respond($"Категория изменена на \"{game.Name}\"");
                 }
                 catch (Exception ex)
                 {
-                    await SendMessage($"Ошибка изменения категории: {ex.Message}");
+                    await msg.Respond($"Ошибка изменения категории: {ex.Message}");
                 }
 
                 break;
             }
             case "model":
             {
-                if (!IsAdmin(messageUserId))
+                if (!isAdmin())
                     return;
 
                 if (string.IsNullOrEmpty(command.ArgumentsAsString))
                 {
-                    await SendMessage($"Current model: '{_streamWatcher.MessagesProcessor.AiClient.Model}'");
+                    await msg.Respond($"Current model: '{_streamWatcher.MessagesProcessor.AiClient.Model}'");
                     return;
                 }
 
@@ -371,13 +391,12 @@ public class MessageHandler
                 {
                     await _streamWatcher.MessagesProcessor.AiClient.SetModel(command.ArgumentsAsString);
 
-                    await SendMessage($"Model changed to '{command.ArgumentsAsString}'");
+                    await msg.Respond($"Model changed to '{command.ArgumentsAsString}'");
                 }
                 catch (Exception ex)
                 {
-                    await SendMessage($"Model {command.ArgumentsAsString} not found");
+                    await msg.Respond($"Model {command.ArgumentsAsString} not found");
                 }
-
                 break;
             }
         }
@@ -550,7 +569,7 @@ public class MessageHandler
         await SendMessage($"@{userName} {text}");
     }
 
-    private async Task SendMessage(string text)
+    public async Task SendMessage(string text)
     {
         try
         {

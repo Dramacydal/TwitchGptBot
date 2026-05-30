@@ -1,9 +1,11 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using BoostyLib;
 using Newtonsoft.Json.Linq;
 using TwitchGpt.Api;
 using TwitchGpt.Entities;
 using TwitchGpt.Gpt.Factories;
+using TwitchGpt.Handlers;
+using TwitchGpt.Tui;
 
 namespace TwitchGpt;
 
@@ -75,7 +77,17 @@ internal abstract class Program
 
     public static async Task Main(string[] args)
     {
-        var namedArgs = RunParams.Load(args);
+        RunParams namedArgs;
+        try
+        {
+            namedArgs = RunParams.Load(args);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return;
+        }
+
         if (!namedArgs.TryGetString("bot", out var strBot))
         {
             Console.WriteLine("--bot argument is missing.");
@@ -97,66 +109,113 @@ internal abstract class Program
         if (namedArgs.TryGetString("roles-dir", out var rolesDir))
             ModelFactory.RolesDir = rolesDir;
 
-        var api = await CredentialsFactory.GetTwitchBotCredentials(botId);
+        // Initialize TUI before anything else so NLog output goes there
+        TuiApplication.Init();
 
-        var bot = await Bot.Create(api, channel.ToString());
-
-        if (namedArgs.TryGetString("boosty-channel", out var boostyChannel) &&
-            namedArgs.TryGetString("boosty-api-name", out var boostyApiName))
+        // Run the bot on a background task — TUI owns the main thread
+        var botTask = Task.Run(async () =>
         {
-            BoostyApiCredentials? boostyApiCredentials;
             try
             {
-                boostyApiCredentials = await CredentialsFactory.GetBoostyCredentials(boostyApiName);
+                var api = await CredentialsFactory.GetTwitchBotCredentials(botId);
+                var bot = await Bot.Create(api, channel.ToString());
+
+                if (namedArgs.TryGetString("boosty-channel", out var boostyChannel) &&
+                    namedArgs.TryGetString("boosty-api-name", out var boostyApiName))
+                {
+                    BoostyApiCredentials boostyApiCredentials;
+                    try
+                    {
+                        boostyApiCredentials = await CredentialsFactory.GetBoostyCredentials(boostyApiName);
+                    }
+                    catch (Exception ex)
+                    {
+                        TuiApplication.AppendLog($"Boosty error: {ex.Message}");
+                        return;
+                    }
+
+                    var boostyApi = new BoostyApi(new()
+                        {
+                            Credentials = new()
+                            {
+                                AccessToken = boostyApiCredentials.AccessToken,
+                                RefreshToken = boostyApiCredentials.RefreshToken,
+                                DeviceId = boostyApiCredentials.DeviceId,
+                                ExpiresAt = boostyApiCredentials.ExpiresAt,
+                            },
+                            Headers = new()
+                            {
+                                ["User-Agent"] =
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                            }
+                        }
+                    );
+
+                    bot.BoostyApi = new BoostyApiCaller(boostyApiCredentials);
+                    bot.BoostyClient = new StreamClient(boostyChannel, boostyApi);
+                }
+
+                if (namedArgs.TryGetBool("messages-to-log", out var messagesToLog))
+                    bot.SetDryRun(messagesToLog);
+
+                // Wire up TUI commands once we have a bot instance
+                TuiApplication.OnCommand = cmd => HandleLocalCommand(cmd, bot);
+                TuiApplication.OnQuit = () => _ = Task.Run(bot.Stop);
+
+                await bot.Start();
+
+                if (namedArgs.TryGetInt("watch", out var watchEnabled))
+                    bot.SetWatchEnabled(watchEnabled > 0);
+
+                if (namedArgs.TryGetInt("dialogs", out var dialogsEnabled))
+                    bot.SetDialogsEnabled(dialogsEnabled > 0);
+
+                TuiApplication.AppendLog("Bot started. Type 'help' for commands.");
+
+                await bot.WaitForCompletion();
+
+                TuiApplication.AppendLog("Bot stopped.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                return;
+                TuiApplication.AppendLog($"Fatal error: {ex.GetType().Name}: {ex.Message}");
+                await Task.Delay(3000);
             }
+            finally
+            {
+                TuiApplication.RequestStop();
+            }
+        });
 
-            BoostyApi boostyApi = new(new()
-                {
-                    Credentials = new()
-                    {
-                        AccessToken = boostyApiCredentials.AccessToken,
-                        RefreshToken = boostyApiCredentials.RefreshToken,
-                        DeviceId = boostyApiCredentials.DeviceId,
-                        ExpiresAt = boostyApiCredentials.ExpiresAt,
-                    },
-                    Headers = new()
-                    {
-                        ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" 
-                    }
-                }
-            );
+        // TUI event loop — blocks until the window closes
+        TuiApplication.Run();
+        TuiApplication.Shutdown();
 
-            bot.BoostyApi = new BoostyApiCaller(boostyApiCredentials);
-            bot.BoostyClient = new StreamClient(boostyChannel, boostyApi);
-        }
-        
-        Console.CancelKeyPress += async (_, e) =>
+        // Wait for the bot task to finish cleanly
+        await botTask;
+    }
+
+    private static async Task HandleLocalCommand(string input, Bot bot)
+    {
+        var cmd = input.Split(' ', 2)[0].ToLowerInvariant();
+
+        switch (cmd)
         {
-            Console.WriteLine("Ctrl+C received");
-            e.Cancel = true;
-            await bot.Stop();
-        };
+            case "q":
+            case "quit":
+            case "exit":
+                await bot.Stop();
+                TuiApplication.RequestStop();
+                return;
+            case "help":
+                TuiApplication.AppendLog(
+                    "Commands: quit, reload, suspend, resume, reset, role, " +
+                    "togglewatch, watchperiod, toggledialog, ignore, unignore, " +
+                    "resolve, category, snapshotcount, model");
+                return;
+        }
 
-        if (namedArgs.TryGetBool("messages-to-log", out var messagesToLog))
-            bot.SetDryRun(messagesToLog);
-
-        Console.WriteLine("Started");
-
-        await bot.Start();
-
-        if (namedArgs.TryGetInt("watch", out var watchEnabled))
-            bot.SetWatchEnabled(watchEnabled > 0);
-        
-        if (namedArgs.TryGetInt("dialogs", out var dialogsEnabled))
-            bot.SetDialogsEnabled(dialogsEnabled > 0);
-        
-        await bot.WaitForCompletion();
-
-        Console.WriteLine("Stopped");
+        // Forward everything else to MessageHandler
+        await bot.HandleLocalCommand(input, msg => TuiApplication.AppendLog(msg));
     }
 }

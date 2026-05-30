@@ -134,7 +134,19 @@ public class Bot
         {
             try
             {
-                await _messageHandler?.HandleCommand(args.Command, args.ChatMessage);
+                if (_messageHandler != null)
+                {
+                    await _messageHandler.HandleCommand(new()
+                    {
+                        Name = args.Command.Name,
+                        ArgumentsAsList = args.Command.ArgumentsAsList,
+                    }, new()
+                    {
+                        UserId = args.ChatMessage.UserId,
+                        UserName = args.ChatMessage.Username,
+                        Respond = _messageHandler.SendMessage
+                    });
+                }
             }
             catch (Exception ex)
             {
@@ -184,6 +196,28 @@ public class Bot
     public async Task ReloadAnnouncements()
     {
         await _announcer.Reload();
+    }
+
+    public async Task HandleLocalCommand(string commandLine, Action<string> respond)
+    {
+        if (_messageHandler == null) { respond("Bot not initialized yet."); return; }
+        
+        var commandParts = commandLine.Split(' ');
+        
+        await _messageHandler.HandleCommand(new MessageHandler.BotCommandInfo
+        {
+            Name = commandParts[0],
+            ArgumentsAsList =  commandParts.Skip(1).ToList()
+        }, new MessageHandler.CommandContext
+        {
+            UserId = "",
+            UserName = "",
+            Respond = (text) =>
+            {
+                respond(text);
+                return Task.CompletedTask;
+            }
+        });
     }
 
     public void SetDryRun(bool dryRun) => _dryRun = dryRun;
