@@ -14,6 +14,7 @@ namespace TwitchGpt.Gpt;
 public class AiMessagesProcessor
 {
     public static int SnapshotHistoryCount = 3;
+    public static int MaxMessageLogSize = 200;
 
     private DateTime _skipProcessingTime = DateTime.Now;
 
@@ -35,6 +36,7 @@ public class AiMessagesProcessor
         _bot = bot;
         _channelUser = channelUser;
         ProcessPeriod = ConfigManager.GetPath<int>("message_process_period");
+        MaxMessageLogSize = ConfigManager.GetPath<int>("message_log_size");
     }
 
     public static async Task<AiMessagesProcessor> Create(Bot bot, User channelUser, params AbstractStreamInfo?[] streamInfos)
@@ -94,8 +96,8 @@ public class AiMessagesProcessor
                     continue;
                 }
 
-                if (_messageLog.Count > 200)
-                    _messageLog.RemoveRange(0,_messageLog.Count - 200);
+                if (_messageLog.Count > MaxMessageLogSize)
+                    _messageLog.RemoveRange(0, _messageLog.Count - MaxMessageLogSize);
 
                 allMessages = _messageLog.ToList();
                 botInsertIndex = allMessages.Count;

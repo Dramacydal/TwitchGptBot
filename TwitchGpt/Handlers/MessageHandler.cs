@@ -310,6 +310,23 @@ public class MessageHandler
 
                 return;
             }
+            case "messagelogsize":
+            {
+                if (!isAdmin())
+                    return;
+
+                if (string.IsNullOrEmpty(command.ArgumentsAsString))
+                    await msg.Respond($"Максимальный размер лога: {AiMessagesProcessor.MaxMessageLogSize}");
+                else if (int.TryParse(command.ArgumentsAsString, out var histSize) && histSize > 0)
+                {
+                    AiMessagesProcessor.MaxMessageLogSize = histSize;
+                    await msg.Respond($"Максимальный размер лога установлен в {histSize}");
+                }
+                else
+                    await msg.Respond("Некорректный параметр");
+
+                return;
+            }
             case "category":
             {
                 if (!isAdmin())

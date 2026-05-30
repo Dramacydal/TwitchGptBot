@@ -211,7 +211,7 @@ internal abstract class Program
                 TuiApplication.AppendLog(
                     "Commands: quit, reload, suspend, resume, reset, role, " +
                     "togglewatch, watchperiod, toggledialog, ignore, unignore, " +
-                    "resolve, category, snapshotcount, model");
+                    "resolve, category, snapshotcount, messagelogsize, model");
                 return;
         }
 
