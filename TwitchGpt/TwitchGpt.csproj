@@ -24,13 +24,13 @@
       <None Update="config.json.in">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
-      <None Update="debug_config.json.in">
+      <None Update="channel_config.json.in">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
       <None Update="config.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
-      <None Update="debug_config.json">
+      <None Update="channel_config.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
     </ItemGroup>

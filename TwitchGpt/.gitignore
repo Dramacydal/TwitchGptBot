@@ -1,4 +1,5 @@
 ﻿config.json
 debug_config.json
+channel_config.json
 run.sh
 build.sh
