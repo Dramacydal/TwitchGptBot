@@ -94,6 +94,9 @@ public class AiMessagesProcessor
                     continue;
                 }
 
+                if (_messageLog.Count > 200)
+                    _messageLog.RemoveRange(0,_messageLog.Count - 200);
+
                 allMessages = _messageLog.ToList();
                 botInsertIndex = allMessages.Count;
             }
