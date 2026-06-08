@@ -17,7 +17,9 @@ public class AiClient
     private int _poolIndex = 0;
     
     public string ActorName { get; private init; }
-    
+
+    public string ChannelName { get; set; } = "";
+
     public required RoleModel Role { get; set; }
     
     public HistoryHolder HistoryHolder { get; private set; } = new();
@@ -80,6 +82,7 @@ public class AiClient
         var instructions = Role.Instructions;
 
         instructions = instructions.Replace("{bot_name}", ActorName);
+        instructions = instructions.Replace("{channel_name}", ChannelName);
         
         return string.Join("\r\n", instructions.Split("\n")
             .Select(l => l.Trim())

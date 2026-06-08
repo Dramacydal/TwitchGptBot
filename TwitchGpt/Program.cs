@@ -158,6 +158,10 @@ internal abstract class Program
                 if (namedArgs.TryGetBool("messages-to-log", out var messagesToLog))
                     bot.SetDryRun(messagesToLog);
 
+                if (namedArgs.TryGetString("voice-trigger-words", out var triggerWordsRaw))
+                    bot.VoiceTriggerWords = triggerWordsRaw!
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
                 // Wire up TUI commands once we have a bot instance
                 TuiApplication.OnCommand = cmd => HandleLocalCommand(cmd, bot);
                 TuiApplication.OnQuit = () => _ = Task.Run(bot.Stop);

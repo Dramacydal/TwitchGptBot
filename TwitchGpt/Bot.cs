@@ -223,4 +223,6 @@ public class Bot
     public void SetDryRun(bool dryRun) => _dryRun = dryRun;
 
     public bool IsDryDun() => _dryRun;
+
+    public string[]? VoiceTriggerWords { get; set; }
 }

@@ -31,6 +31,9 @@ public class AiMessagesProcessor
 
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _directMessages = new();
 
+    // Voice commands from stream audio transcription
+    private readonly ConcurrentQueue<string> _voiceCommands = new();
+
     public AbstractStreamInfo?[] _streamInfos;
 
     private AiMessagesProcessor(Bot bot, User channelUser)
@@ -43,9 +46,12 @@ public class AiMessagesProcessor
 
     public static async Task<AiMessagesProcessor> Create(Bot bot, User channelUser, params AbstractStreamInfo?[] streamInfos)
     {
+        var client = await ClientFactory.CreateClient(ClientType.ChatWatcher, bot.BotUserName);
+        client.ChannelName = channelUser.Login;
+
         return new AiMessagesProcessor(bot, channelUser)
         {
-            AiClient = await ClientFactory.CreateClient(ClientType.ChatWatcher, bot.BotUserName),
+            AiClient = client,
             _streamInfos = streamInfos
         };
     }
@@ -67,6 +73,9 @@ public class AiMessagesProcessor
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) =>
         _directMessages.Enqueue(new(text, chatMessage, role));
 
+    public void EnqueueVoiceCommand(string context) =>
+        _voiceCommands.Enqueue(context);
+
     public int ProcessPeriod { get; set; }
 
     protected void DelayProcessing(TimeSpan delay) => _skipProcessingTime = DateTime.Now.Add(delay);
@@ -75,7 +84,7 @@ public class AiMessagesProcessor
 
     public async Task Run(CancellationToken token)
     {
-        await Task.WhenAll(RunMessageWatcher(token), RunReplyWatcher(token));
+        await Task.WhenAll(RunMessageWatcher(token), RunReplyWatcher(token), RunVoiceWatcher(token));
     }
 
     private async Task RunMessageWatcher(CancellationToken token)
@@ -268,11 +277,112 @@ public class AiMessagesProcessor
         Logger.Info($"{nameof(RunReplyWatcher)} stopped");
     }
 
+    private async Task RunVoiceWatcher(CancellationToken token)
+    {
+        Logger.Info($"{nameof(RunVoiceWatcher)} started");
+
+        for (; !token.IsCancellationRequested;)
+        {
+            if (MessageHandler.IsSuspended || IsProcessingDelayed)
+            {
+                await Task.Delay(200);
+                continue;
+            }
+
+            if (!_voiceCommands.TryDequeue(out var context))
+            {
+                await Task.Delay(25);
+                continue;
+            }
+
+            var streamerName = _channelUser.Login;
+
+            Logger.Debug($"Processing voice command from {streamerName}: {context}");
+
+            // Inject the voice message into the chat log so the main bot has full context
+            using (_messageLogLock.EnterScope())
+            {
+                _messageLog.Add(new ChatMessageData
+                {
+                    Date = DateTimeOffset.Now,
+                    UserName = $"[voice] {streamerName}",
+                    Message = context,
+                    IsBot = false,
+                });
+                _incomingMessageCount++;
+            }
+
+            var question = $"Voice transcription from streamer {streamerName}:\n\"{context}\"\n\n" +
+                           $"If the streamer is addressing you, respond starting with @{streamerName}. " +
+                           $"If not — reply with exactly: PASS";
+
+            var currentProviderHash = AiClient.ProviderHash;
+            try
+            {
+                var responseText = await AiClient.Ask(question, _streamInfos, useHistory: true);
+                if (string.IsNullOrWhiteSpace(responseText))
+                    throw new UnknownGeminiException("Response text is empty");
+
+                Logger.Debug($"Voice command response: {responseText}");
+
+                if (responseText.Trim().Equals("PASS", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Inject bot response into the log so future context is aware of it
+                using (_messageLogLock.EnterScope())
+                {
+                    _messageLog.Add(new ChatMessageData
+                    {
+                        Date = DateTimeOffset.Now,
+                        UserName = AiClient.ActorName,
+                        Message = responseText,
+                        IsBot = true,
+                    });
+                }
+
+                await SendMessage(responseText);
+            }
+            catch (TooManyRequestsException ex)
+            {
+                Logger.Error($"{ex.GetType()}: {ex.Message}");
+                AiClient.RotateClient(currentProviderHash);
+                _voiceCommands.Enqueue(context);
+            }
+            catch (ClientBusyException)
+            {
+                Logger.Warn("Client is busy. Requeueing voice command");
+                _voiceCommands.Enqueue(context);
+            }
+            catch (UnavailableException ex)
+            {
+                Logger.Warn($"Model unavailable. Requeueing voice command: {ex.Message}");
+                DelayProcessing(TimeSpan.FromMilliseconds(2500));
+                _voiceCommands.Enqueue(context);
+            }
+            catch (UnknownGeminiException ex)
+            {
+                Logger.Error($"Unknown error processing voice command: {ex.Message}");
+            }
+            catch (SafetyException ex)
+            {
+                Logger.Error($"Safety error processing voice command: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"{ex.GetType()}: {ex.Message}");
+                DelayProcessing(TimeSpan.FromMilliseconds(500));
+            }
+        }
+
+        Logger.Info($"{nameof(RunVoiceWatcher)} stopped");
+    }
+
     public void Reset()
     {
         using var _ = _messageLogLock.EnterScope();
         _messageLog.Clear();
         _directMessages.Clear();
+        _voiceCommands.Clear();
         _lastSentIncomingCount = 0;
         AiClient.Reset();
         DelayProcessing(TimeSpan.FromSeconds(0));

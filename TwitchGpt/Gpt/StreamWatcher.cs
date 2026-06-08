@@ -1,6 +1,8 @@
 ﻿using System.Text.Json.Nodes;
 using NLog;
 using SixLabors.ImageSharp;
+using TwitchGpt.Database.Mappers;
+using TwitchGpt.Gpt.Audio;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Handlers;
 using TwitchGpt.Helpers;
@@ -20,9 +22,13 @@ public class StreamWatcher
     private TwitchStreamInfo _twitchStreamInfo;
 
     private BoostyStreamInfo _boostyStreamInfo;
-    
+
+    private AudioChunkWriter? _audioChunkWriter;
+    private AudioTranscriptionService? _audioTranscriptionService;
+    private VoiceCommandProcessor? _voiceCommandProcessor;
+
     private readonly Bot _bot;
-    
+
     private readonly User _channelUser;
 
     private StreamWatcher(Bot bot, User channelUser)
@@ -35,23 +41,64 @@ public class StreamWatcher
     {
         var twitchStreamInfo = new TwitchStreamInfo();
         var boostyStreamInfo = new BoostyStreamInfo();
-        
-        return new StreamWatcher(bot, channelUser)
+
+        var watcher = new StreamWatcher(bot, channelUser)
         {
             MessagesProcessor = await AiMessagesProcessor.Create(bot, channelUser, twitchStreamInfo, boostyStreamInfo),
             _boostyStreamInfo = boostyStreamInfo,
             _twitchStreamInfo = twitchStreamInfo,
         };
+
+        await watcher.SetupAudioPipelineAsync();
+
+        return watcher;
+    }
+
+    private async Task SetupAudioPipelineAsync()
+    {
+        var triggerWords = _bot.VoiceTriggerWords;
+        if (triggerWords == null || triggerWords.Length == 0)
+        {
+            Logger.Info("Voice pipeline disabled: 'voice-trigger-words' not set in channel config");
+            return;
+        }
+
+        // Reuse the first key from the existing OpenRouter pool
+        var keys = await TokenMapper.Instance.GetOpenRouterKeyPool();
+        if (keys.Count == 0)
+        {
+            Logger.Warn("Voice pipeline disabled: no OpenRouter keys available");
+            return;
+        }
+
+        var audioClient = new OpenRouterAudioClient(keys[0]);
+        _audioChunkWriter = new AudioChunkWriter(_channelUser.Login, 10);
+        _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, triggerWords);
+        _voiceCommandProcessor = new VoiceCommandProcessor(_audioTranscriptionService, MessagesProcessor);
+
+        Logger.Info($"Voice pipeline ready. Triggers: [{string.Join(", ", triggerWords)}]");
     }
 
     public async Task RunAsync(CancellationToken token)
     {
         var t1 = MessagesProcessor.Run(token).ConfigureAwaitFalse();
-
         var t2 = TwitchStreamChecker(token).ConfigureAwaitFalse();
         var t3 = BoostyStreamChecker(token).ConfigureAwaitFalse();
 
-        await Task.WhenAll(t1, t2, t3);
+        // Audio pipeline tasks — only run if voice is configured
+        if (_audioChunkWriter != null && _audioTranscriptionService != null && _voiceCommandProcessor != null)
+        {
+            await _audioChunkWriter.StartAsync(token);
+
+            var t4 = _audioTranscriptionService.RunAsync(token).ConfigureAwaitFalse();
+            var t5 = _voiceCommandProcessor.RunAsync(token).ConfigureAwaitFalse();
+
+            await Task.WhenAll(t1, t2, t3, t4, t5);
+        }
+        else
+        {
+            await Task.WhenAll(t1, t2, t3);
+        }
     }
 
     private async Task TwitchStreamChecker(CancellationToken token)
