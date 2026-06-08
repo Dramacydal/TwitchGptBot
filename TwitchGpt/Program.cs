@@ -110,6 +110,9 @@ internal abstract class Program
             ModelFactory.RolesDir = rolesDir;
 
         // Initialize TUI before anything else so NLog output goes there
+        if (args.Contains("--no-ui"))
+            TuiApplication.SetHeadless();
+
         TuiApplication.Init();
 
         // Run the bot on a background task — TUI owns the main thread

@@ -30,6 +30,9 @@ public static class TuiApplication
     private static TextView? _logView;
     private static TextField? _inputField;
 
+    private static bool _headless;
+    private static readonly TaskCompletionSource _headlessDone = new();
+
     /// <summary>Called when the user submits a command in the input field.</summary>
     public static Func<string, Task>? OnCommand { get; set; }
 
@@ -63,8 +66,39 @@ public static class TuiApplication
         };
     }
 
+    /// <summary>
+    /// Call before Init() to run without a TUI.
+    /// Logs go to stdout, commands are read from stdin.
+    /// </summary>
+    public static void SetHeadless()
+    {
+        _headless = true;
+
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            OnQuit?.Invoke();
+            _headlessDone.TrySetResult();
+        };
+
+        // Read commands from stdin in the background
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                var line = await Task.Run(() => Console.ReadLine());
+                if (line == null) break;
+                line = line.Trim();
+                if (!string.IsNullOrEmpty(line))
+                    await (OnCommand?.Invoke(line) ?? Task.CompletedTask);
+            }
+        });
+    }
+
     public static void Init()
     {
+        if (_headless) return;
+
         Application.Init();
         ApplyConsoleColors();
 
@@ -123,6 +157,12 @@ public static class TuiApplication
     /// <summary>Thread-safe: appends a line to the log view.</summary>
     public static void AppendLog(string line)
     {
+        if (_headless)
+        {
+            Console.WriteLine(line);
+            return;
+        }
+
         if (_logView == null) return;
 
         Application.MainLoop?.Invoke(() =>
@@ -134,10 +174,32 @@ public static class TuiApplication
     }
 
     /// <summary>Starts the TUI event loop. Blocks until the window is closed.</summary>
-    public static void Run() => Application.Run();
+    public static void Run()
+    {
+        if (_headless)
+        {
+            _headlessDone.Task.GetAwaiter().GetResult();
+            return;
+        }
 
-    public static void Shutdown() => Application.Shutdown();
+        Application.Run();
+    }
+
+    public static void Shutdown()
+    {
+        if (_headless) return;
+        Application.Shutdown();
+    }
 
     /// <summary>Thread-safe: request the TUI to close.</summary>
-    public static void RequestStop() => Application.MainLoop?.Invoke(() => Application.RequestStop());
+    public static void RequestStop()
+    {
+        if (_headless)
+        {
+            _headlessDone.TrySetResult();
+            return;
+        }
+
+        Application.MainLoop?.Invoke(() => Application.RequestStop());
+    }
 }
