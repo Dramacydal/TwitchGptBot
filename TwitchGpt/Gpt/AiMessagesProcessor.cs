@@ -76,13 +76,13 @@ public class AiMessagesProcessor
     public void EnqueueVoiceCommand(string context) =>
         _voiceCommands.Enqueue(context);
 
-    public int ProcessPeriod { get; set; }
+    public int ProcessPeriod { get; set; } = 90;
 
     protected void DelayProcessing(TimeSpan delay) => _skipProcessingTime = DateTime.Now.Add(delay);
 
     protected bool IsProcessingDelayed => _skipProcessingTime > DateTime.Now;
 
-    public async Task Run(CancellationToken token)
+    public async Task RunAsync(CancellationToken token)
     {
         await Task.WhenAll(RunMessageWatcher(token), RunReplyWatcher(token), RunVoiceWatcher(token));
     }

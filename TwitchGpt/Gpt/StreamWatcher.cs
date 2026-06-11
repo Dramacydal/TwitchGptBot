@@ -56,10 +56,13 @@ public class StreamWatcher
 
     private async Task SetupAudioPipelineAsync()
     {
+        // Chunk writer always runs to maintain a rolling buffer of recent audio
+        _audioChunkWriter = new AudioChunkWriter(_channelUser.Login, _channelUser.Id, 10);
+
         var triggerWords = _bot.VoiceTriggerWords;
         if (triggerWords == null || triggerWords.Length == 0)
         {
-            Logger.Info("Voice pipeline disabled: 'voice-trigger-words' not set in channel config");
+            Logger.Info("Audio chunks will be recorded. Voice recognition disabled: 'voice-trigger-words' not set");
             return;
         }
 
@@ -67,12 +70,11 @@ public class StreamWatcher
         var keys = await TokenMapper.Instance.GetOpenRouterKeyPool();
         if (keys.Count == 0)
         {
-            Logger.Warn("Voice pipeline disabled: no OpenRouter keys available");
+            Logger.Warn("Voice recognition disabled: no OpenRouter keys available");
             return;
         }
 
         var audioClient = new OpenRouterAudioClient(keys[0]);
-        _audioChunkWriter = new AudioChunkWriter(_channelUser.Login, _channelUser.Id, 10);
         _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, triggerWords);
         _voiceCommandProcessor = new VoiceCommandProcessor(_audioTranscriptionService, MessagesProcessor);
 
@@ -81,18 +83,17 @@ public class StreamWatcher
 
     public async Task RunAsync(CancellationToken token)
     {
-        var t1 = MessagesProcessor.Run(token).ConfigureAwaitFalse();
+        var t1 = MessagesProcessor.RunAsync(token).ConfigureAwaitFalse();
         var t2 = TwitchStreamChecker(token).ConfigureAwaitFalse();
         var t3 = BoostyStreamChecker(token).ConfigureAwaitFalse();
 
-        // Audio pipeline tasks — only run if voice is configured
-        if (_audioChunkWriter != null && _audioTranscriptionService != null && _voiceCommandProcessor != null)
-        {
+        if (_audioChunkWriter != null)
             await _audioChunkWriter.StartAsync(token);
 
+        if (_audioTranscriptionService != null && _voiceCommandProcessor != null)
+        {
             var t4 = _audioTranscriptionService.RunAsync(token).ConfigureAwaitFalse();
             var t5 = _voiceCommandProcessor.RunAsync(token).ConfigureAwaitFalse();
-
             await Task.WhenAll(t1, t2, t3, t4, t5);
         }
         else
