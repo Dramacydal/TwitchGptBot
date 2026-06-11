@@ -554,7 +554,7 @@ public class MessageHandler
 
         var rapidApiKeys = await RapidApiKeyMapper.Instance.GetRapidApiKeyPool();
         if (rapidApiKeys.Count > 0)
-            instance._trackRecognizer = new ShazamClientV3(rapidApiKeys[0], ProxyHelper.GetConfiguredProxy());
+            instance._trackRecognizer = new ShazamClientV3(rapidApiKeys[0], ProxyHelper.GetRapidApiProxy());
 
         await instance.LoadGames();
 

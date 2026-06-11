@@ -98,7 +98,7 @@ public class AiClient
             _aiPool.Add(new(token.GetHashCode(), new OpenRouterClient(new OpenRouterClientOptions()
             {
                 ApiKey = token,
-                HttpClient = CreateHttpClient(ProxyHelper.GetConfiguredProxy()),
+                HttpClient = CreateHttpClient(ProxyHelper.GetGptProxy()),
             })));
         }
     }

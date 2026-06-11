@@ -25,6 +25,11 @@
     "user": "",
     "password": ""
   },
+  "rapidapi_proxy": {
+    "url": "",
+    "user": "",
+    "password": ""
+  },
   "streamlink": "streamlink",
   "message_process_period": 90,
   "message_log_size": 200

@@ -75,7 +75,7 @@ public class StreamWatcher
             return;
         }
 
-        var audioClient = new OpenRouterAudioClient(keys[0], ProxyHelper.GetConfiguredProxy());
+        var audioClient = new OpenRouterAudioClient(keys[0], ProxyHelper.GetGptProxy());
         _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, MessagesProcessor, triggerWords);
 
         Logger.Info($"Voice pipeline ready. Triggers: [{string.Join(", ", triggerWords)}]");

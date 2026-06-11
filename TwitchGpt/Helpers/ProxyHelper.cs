@@ -6,11 +6,15 @@ namespace TwitchGpt.Helpers;
 
 public static class ProxyHelper
 {
-    public static IWebProxy? GetConfiguredProxy()
+    public static IWebProxy? GetGptProxy() => GetProxy("gpt_proxy");
+
+    public static IWebProxy? GetRapidApiProxy() => GetProxy("rapidapi_proxy");
+
+    private static IWebProxy? GetProxy(string configKey)
     {
         try
         {
-            var config = ConfigManager.GetPath<Proxy>("gpt_proxy");
+            var config = ConfigManager.GetPath<Proxy>(configKey);
             if (string.IsNullOrEmpty(config?.Url))
                 return null;
 
