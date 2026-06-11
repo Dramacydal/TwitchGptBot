@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using NLog;
 
 namespace TwitchGpt.Gpt.Audio;
@@ -6,13 +5,13 @@ namespace TwitchGpt.Gpt.Audio;
 /// <summary>
 /// Consumes audio chunks from AudioChunkWriter, transcribes them via Whisper,
 /// maintains a rolling context buffer, and detects trigger words.
-/// When a trigger is found, publishes the full context to the Commands channel
-/// and resets the buffer.
+/// When a trigger is found, enqueues the full context into AiMessagesProcessor and resets the buffer.
 /// </summary>
 public sealed class AudioTranscriptionService
 {
     private readonly AudioChunkWriter _chunkWriter;
     private readonly OpenRouterAudioClient _audioClient;
+    private readonly AiMessagesProcessor _messagesProcessor;
     private readonly string[] _triggerWords;
     private readonly int _maxBufferSize;
     private readonly TimeSpan _cooldown;
@@ -28,13 +27,7 @@ public sealed class AudioTranscriptionService
     // Rolling buffer of recent transcriptions
     private readonly Queue<string> _contextBuffer = new();
 
-    // Detected voice commands are published here for the bot to consume
-    private readonly Channel<string> _commandChannel = Channel.CreateBounded<string>(
-        new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
-
     private DateTime _lastTriggerAt = DateTime.MinValue;
-
-    public ChannelReader<string> Commands => _commandChannel.Reader;
 
     /// <summary>Returns paths to the most recently processed chunk files still on disk.</summary>
     public IReadOnlyList<string> RecentChunkPaths => _chunkFileQueue.ToArray();
@@ -45,6 +38,7 @@ public sealed class AudioTranscriptionService
 
     /// <param name="chunkWriter">Source of audio chunk file paths</param>
     /// <param name="audioClient">Whisper client for transcription</param>
+    /// <param name="messagesProcessor">Destination for detected voice commands</param>
     /// <param name="triggerWords">Words that indicate the streamer is addressing the bot</param>
     /// <param name="maxBufferSize">How many transcriptions to keep in context (default 5 ≈ 25s)</param>
     /// <param name="maxStoredChunks">How many processed chunk files to keep on disk (default 3)</param>
@@ -52,6 +46,7 @@ public sealed class AudioTranscriptionService
     public AudioTranscriptionService(
         AudioChunkWriter chunkWriter,
         OpenRouterAudioClient audioClient,
+        AiMessagesProcessor messagesProcessor,
         string[] triggerWords,
         int maxBufferSize = 5,
         int maxStoredChunks = 3,
@@ -59,6 +54,7 @@ public sealed class AudioTranscriptionService
     {
         _chunkWriter = chunkWriter;
         _audioClient = audioClient;
+        _messagesProcessor = messagesProcessor;
         _triggerWords = triggerWords;
         _maxBufferSize = maxBufferSize;
         _maxStoredChunks = maxStoredChunks;
@@ -83,8 +79,6 @@ public sealed class AudioTranscriptionService
                 RetainChunk(chunkPath);
             }
         }
-
-        _commandChannel.Writer.TryComplete();
     }
 
     private async Task ProcessChunkAsync(string chunkPath, CancellationToken token)
@@ -127,7 +121,7 @@ public sealed class AudioTranscriptionService
         _lastTriggerAt = DateTime.Now;
         _contextBuffer.Clear();
 
-        _commandChannel.Writer.TryWrite(fullContext);
+        _messagesProcessor.EnqueueVoiceCommand(fullContext);
     }
 
     private void AddToBuffer(string text)

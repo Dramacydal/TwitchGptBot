@@ -25,7 +25,6 @@ public class StreamWatcher
 
     private AudioChunkWriter? _audioChunkWriter;
     private AudioTranscriptionService? _audioTranscriptionService;
-    private VoiceCommandProcessor? _voiceCommandProcessor;
 
     private readonly Bot _bot;
 
@@ -75,8 +74,7 @@ public class StreamWatcher
         }
 
         var audioClient = new OpenRouterAudioClient(keys[0]);
-        _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, triggerWords);
-        _voiceCommandProcessor = new VoiceCommandProcessor(_audioTranscriptionService, MessagesProcessor);
+        _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, MessagesProcessor, triggerWords);
 
         Logger.Info($"Voice pipeline ready. Triggers: [{string.Join(", ", triggerWords)}]");
     }
@@ -90,11 +88,10 @@ public class StreamWatcher
         if (_audioChunkWriter != null)
             await _audioChunkWriter.StartAsync(token);
 
-        if (_audioTranscriptionService != null && _voiceCommandProcessor != null)
+        if (_audioTranscriptionService != null)
         {
             var t4 = _audioTranscriptionService.RunAsync(token).ConfigureAwaitFalse();
-            var t5 = _voiceCommandProcessor.RunAsync(token).ConfigureAwaitFalse();
-            await Task.WhenAll(t1, t2, t3, t4, t5);
+            await Task.WhenAll(t1, t2, t3, t4);
         }
         else
         {

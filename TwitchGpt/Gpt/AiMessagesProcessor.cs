@@ -32,6 +32,7 @@ public class AiMessagesProcessor
     private ConcurrentQueue<Tuple<string, ChatMessage, RoleModel>> _directMessages = new();
 
     // Voice commands from stream audio transcription
+    private const int MaxVoiceQueueSize = 16;
     private readonly ConcurrentQueue<string> _voiceCommands = new();
 
     public AbstractStreamInfo?[] _streamInfos;
@@ -73,8 +74,12 @@ public class AiMessagesProcessor
     public void EnqueueDirectMessage(string text, ChatMessage chatMessage, RoleModel role) =>
         _directMessages.Enqueue(new(text, chatMessage, role));
 
-    public void EnqueueVoiceCommand(string context) =>
+    public void EnqueueVoiceCommand(string context)
+    {
+        while (_voiceCommands.Count >= MaxVoiceQueueSize)
+            _voiceCommands.TryDequeue(out _);
         _voiceCommands.Enqueue(context);
+    }
 
     public int ProcessPeriod { get; set; } = 90;
 
