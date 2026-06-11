@@ -426,12 +426,17 @@ public class MessageHandler
                 if (_trackRecognizer == null)
                     return;
 
+                if (_cooldownHandler.IsOnCooldown("shazam"))
+                    return;
+
                 var chunks = _streamWatcher.RecentChunkPaths;
                 if (chunks.Count == 0)
                 {
                     await msg.Respond("Не удалось распознать трек");
                     return;
                 }
+
+                _cooldownHandler.Set("shazam", TimeSpan.FromSeconds(10));
 
                 try
                 {
@@ -656,6 +661,7 @@ public class MessageHandler
     
     private StreamWatcher _streamWatcher;
     private ITrackRecognizer? _trackRecognizer;
+    private readonly CommandCooldownHandler _cooldownHandler = new();
 
     public async Task RunAsync(CancellationToken token)
     {
