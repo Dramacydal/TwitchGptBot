@@ -66,7 +66,7 @@ public class StreamWatcher
         }
 
         // Reuse the first key from the existing OpenRouter pool
-        var keys = await TokenMapper.Instance.GetOpenRouterKeyPool();
+        var keys = await OpenrouterTokenMapper.Instance.GetOpenRouterKeyPool();
         if (keys.Count == 0)
         {
             Logger.Warn("Voice recognition disabled: no OpenRouter keys available");

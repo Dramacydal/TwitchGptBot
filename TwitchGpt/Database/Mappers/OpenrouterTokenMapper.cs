@@ -3,7 +3,7 @@ using TwitchGpt.Database.Sql;
 
 namespace TwitchGpt.Database.Mappers;
 
-public class TokenMapper : AbstractMapper<TokenMapper, SqlConnection>
+public class OpenrouterTokenMapper : AbstractMapper<OpenrouterTokenMapper, SqlConnection>
 {
     public override SqlConnection Connection => SqlConnectionManager.GetConnection("gpt");
 

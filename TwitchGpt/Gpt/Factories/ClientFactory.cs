@@ -16,7 +16,7 @@ public static class ClientFactory
     private static async Task<List<string>> GetOpenRouterKeysAsync()
     {
         if (_geminiTokens == null)
-            _geminiTokens = await TokenMapper.Instance.GetOpenRouterKeyPool();
+            _geminiTokens = await OpenrouterTokenMapper.Instance.GetOpenRouterKeyPool();
 
         return _geminiTokens;
     }
