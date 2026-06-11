@@ -26,7 +26,7 @@ public class StreamWatcher
     private AudioChunkWriter? _audioChunkWriter;
     private AudioTranscriptionService? _audioTranscriptionService;
 
-    public IReadOnlyList<string> RecentChunkPaths => _audioTranscriptionService?.RecentChunkPaths ?? [];
+    public IReadOnlyList<string> RecentChunkPaths => _audioChunkWriter?.RecentChunkPaths ?? [];
 
     private readonly Bot _bot;
 
@@ -75,7 +75,7 @@ public class StreamWatcher
             return;
         }
 
-        var audioClient = new OpenRouterAudioClient(keys[0]);
+        var audioClient = new OpenRouterAudioClient(keys[0], ProxyHelper.GetConfiguredProxy());
         _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, MessagesProcessor, triggerWords);
 
         Logger.Info($"Voice pipeline ready. Triggers: [{string.Join(", ", triggerWords)}]");

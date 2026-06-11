@@ -22,7 +22,15 @@ public sealed class AudioChunkWriter : IAsyncDisposable
     private ChildProcessGuard? _processGuard;
     private int _lastChunkIndex = -1;
 
+    private readonly Queue<string> _recentChunks = new();
+    private const int MaxRecentChunks = 3;
+
     public ChannelReader<string> Chunks => _channel.Reader;
+
+    public IReadOnlyList<string> RecentChunkPaths
+    {
+        get { lock (_recentChunks) return _recentChunks.ToArray(); }
+    }
 
     public AudioChunkWriter(string channelName, string channelId, int chunkSeconds = 5, string? outputDir = null)
     {
@@ -92,6 +100,13 @@ public sealed class AudioChunkWriter : IAsyncDisposable
             if (File.Exists(readyPath))
             {
                 Logger.Debug($"AudioChunkWriter: chunk ready → {readyPath}");
+
+                lock (_recentChunks)
+                {
+                    _recentChunks.Enqueue(readyPath);
+                    if (_recentChunks.Count > MaxRecentChunks)
+                        TryDeleteFile(_recentChunks.Dequeue());
+                }
 
                 const int maxAttempts = 5;
                 for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -198,6 +213,12 @@ public sealed class AudioChunkWriter : IAsyncDisposable
         _process?.Dispose();
         _processGuard?.Dispose();
         await Task.CompletedTask;
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); }
+        catch { /* ignore — file may already be deleted */ }
     }
 
     private ILogger Logger => Logging.Logger.Instance(nameof(AudioChunkWriter));

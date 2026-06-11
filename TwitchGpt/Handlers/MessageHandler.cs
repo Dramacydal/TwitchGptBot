@@ -7,6 +7,7 @@ using TwitchGpt.Gpt;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Factories;
 using TwitchGpt.Gpt.Music;
+using TwitchGpt.Helpers;
 using TwitchLib.Api.Helix.Models.Channels.ModifyChannelInformation;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -548,7 +549,7 @@ public class MessageHandler
 
         var rapidApiKeys = await RapidApiKeyMapper.Instance.GetRapidApiKeyPool();
         if (rapidApiKeys.Count > 0)
-            instance._trackRecognizer = new ShazamClient(rapidApiKeys[0]);
+            instance._trackRecognizer = new ShazamClient(rapidApiKeys[0], ProxyHelper.GetConfiguredProxy());
 
         await instance.LoadGames();
 

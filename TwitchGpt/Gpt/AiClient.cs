@@ -2,11 +2,11 @@
 using NLog;
 using OpenRouter.NET;
 using OpenRouter.NET.Models;
-using TwitchGpt.Config;
 using TwitchGpt.Exceptions;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Enums;
 using TwitchGpt.Gpt.Factories;
+using TwitchGpt.Helpers;
 
 namespace TwitchGpt.Gpt;
 
@@ -40,27 +40,6 @@ public class AiClient
             throw new Exception($"Model {modelId} not found");
 
         Model = modelId;
-    }
-
-    private IWebProxy? GetProxy()
-    {
-        try
-        {
-            var config = ConfigManager.GetPath<Proxy>("gpt_proxy");
-            if (string.IsNullOrEmpty(config?.Url))
-                return null;
-
-            return new WebProxy()
-            {
-                Address = new Uri(config.Url),
-                Credentials =
-                    new NetworkCredential(config.User, config.Password)
-            };
-        }
-        catch (Exception ex)
-        {
-            return null;
-        }
     }
 
     private OpenRouterClient GetOpenRouter()
@@ -119,7 +98,7 @@ public class AiClient
             _aiPool.Add(new(token.GetHashCode(), new OpenRouterClient(new OpenRouterClientOptions()
             {
                 ApiKey = token,
-                HttpClient = CreateHttpClient(GetProxy()),
+                HttpClient = CreateHttpClient(ProxyHelper.GetConfiguredProxy()),
             })));
         }
     }
