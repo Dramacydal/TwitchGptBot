@@ -5,19 +5,19 @@ using NLog;
 
 namespace TwitchGpt.Gpt.Music;
 
-public class ShazamClient : ITrackRecognizer
+public class ShazamClientV3 : ITrackRecognizer
 {
     private readonly HttpClient _httpClient;
-    private const string RecognizeUrl = "https://shazam-api6.p.rapidapi.com/shazam/recognize/";
+    private const string RecognizeUrl = "https://shazam-core.p.rapidapi.com/v1/tracks/recognize";
 
-    public ShazamClient(string apiKey, IWebProxy? proxy = null)
+    public ShazamClientV3(string apiKey, IWebProxy? proxy = null)
     {
         _httpClient = new HttpClient(new HttpClientHandler
         {
             UseProxy = proxy != null,
-            Proxy = proxy
+            Proxy = proxy,
         });
-        _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "shazam-api6.p.rapidapi.com");
+        _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "shazam-core.p.rapidapi.com");
         _httpClient.DefaultRequestHeaders.Add("x-rapidapi-key", apiKey);
     }
 
@@ -34,7 +34,8 @@ public class ShazamClient : ITrackRecognizer
 
         using var form = new MultipartFormDataContent();
         using var fileContent = new StreamContent(fileStream);
-        form.Add(fileContent, "upload_file", fileName);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+        form.Add(fileContent, "file", fileName);
 
         var response = await _httpClient.PostAsync(RecognizeUrl, form, token);
         response.EnsureSuccessStatusCode();
@@ -43,27 +44,18 @@ public class ShazamClient : ITrackRecognizer
         Logger.Debug($"Shazam response: {json}");
         var result = JsonSerializer.Deserialize<RecognizeResponse>(json);
 
-        var track = result?.Result?.Track;
+        var track = result?.Track;
         if (track == null)
             return null;
 
         return new TrackInfo(track.Title ?? "", track.Subtitle ?? "");
     }
 
-    private ILogger Logger => Logging.Logger.Instance(nameof(ShazamClient));
+    private ILogger Logger => Logging.Logger.Instance(nameof(ShazamClientV3));
 
     // ── JSON model ──────────────────────────────────────────────────────────────
 
     private class RecognizeResponse
-    {
-        [JsonPropertyName("status")]
-        public bool Status { get; set; }
-
-        [JsonPropertyName("result")]
-        public RecognizeResult? Result { get; set; }
-    }
-
-    private class RecognizeResult
     {
         [JsonPropertyName("track")]
         public TrackData? Track { get; set; }

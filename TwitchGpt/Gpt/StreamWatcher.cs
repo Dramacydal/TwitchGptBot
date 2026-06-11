@@ -87,18 +87,15 @@ public class StreamWatcher
         var t2 = TwitchStreamChecker(token).ConfigureAwaitFalse();
         var t3 = BoostyStreamChecker(token).ConfigureAwaitFalse();
 
+        var tasks = new List<Task> { t1, t2, t3 };
+
         if (_audioChunkWriter != null)
-            await _audioChunkWriter.StartAsync(token);
+            tasks.Add(_audioChunkWriter.RunAsync(token));
 
         if (_audioTranscriptionService != null)
-        {
-            var t4 = _audioTranscriptionService.RunAsync(token).ConfigureAwaitFalse();
-            await Task.WhenAll(t1, t2, t3, t4);
-        }
-        else
-        {
-            await Task.WhenAll(t1, t2, t3);
-        }
+            tasks.Add(_audioTranscriptionService.RunAsync(token));
+
+        await Task.WhenAll(tasks);
     }
 
     private async Task TwitchStreamChecker(CancellationToken token)

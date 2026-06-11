@@ -436,7 +436,7 @@ public class MessageHandler
                     return;
                 }
 
-                _cooldownHandler.Set("shazam", TimeSpan.FromSeconds(10));
+                _cooldownHandler.Set("shazam", TimeSpan.FromSeconds(5));
 
                 try
                 {
@@ -554,7 +554,7 @@ public class MessageHandler
 
         var rapidApiKeys = await RapidApiKeyMapper.Instance.GetRapidApiKeyPool();
         if (rapidApiKeys.Count > 0)
-            instance._trackRecognizer = new ShazamClient(rapidApiKeys[0], ProxyHelper.GetConfiguredProxy());
+            instance._trackRecognizer = new ShazamClientV3(rapidApiKeys[0], ProxyHelper.GetConfiguredProxy());
 
         await instance.LoadGames();
 

@@ -81,7 +81,7 @@ public sealed class AudioTranscriptionService
 
     private async Task ProcessChunkAsync(byte[] audioData, CancellationToken token)
     {
-        var text = await _audioClient.TranscribeAsync(audioData, format: "wav", token: token);
+        var text = await _audioClient.TranscribeAsync(audioData, format: "mp3", token: token);
 
         if (string.IsNullOrWhiteSpace(text))
             return;

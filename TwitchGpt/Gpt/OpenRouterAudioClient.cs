@@ -24,7 +24,7 @@ public class OpenRouterAudioClient
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
     }
 
-    public async Task<string?> TranscribeAsync(byte[] audioData, string format = "wav", CancellationToken token = default)
+    public async Task<string?> TranscribeAsync(byte[] audioData, string format = "mp3", CancellationToken token = default)
     {
         var payload = new TranscriptionRequest
         {
@@ -71,7 +71,7 @@ public class OpenRouterAudioClient
         public string Data { get; set; } = "";
 
         [JsonPropertyName("format")]
-        public string Format { get; set; } = "wav";
+        public string Format { get; set; } = "mp3";
     }
 
     private class TranscriptionResponse

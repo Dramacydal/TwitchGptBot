@@ -5,19 +5,19 @@ using NLog;
 
 namespace TwitchGpt.Gpt.Music;
 
-public class ShazamClient : ITrackRecognizer
+public class ShazamClientV2 : ITrackRecognizer
 {
     private readonly HttpClient _httpClient;
-    private const string RecognizeUrl = "https://shazam-api6.p.rapidapi.com/shazam/recognize/";
+    private const string RecognizeUrl = "https://shazam-api-free.p.rapidapi.com/shazam/recognize/";
 
-    public ShazamClient(string apiKey, IWebProxy? proxy = null)
+    public ShazamClientV2(string apiKey, IWebProxy? proxy = null)
     {
         _httpClient = new HttpClient(new HttpClientHandler
         {
             UseProxy = proxy != null,
             Proxy = proxy
         });
-        _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "shazam-api6.p.rapidapi.com");
+        _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "shazam-api-free.p.rapidapi.com");
         _httpClient.DefaultRequestHeaders.Add("x-rapidapi-key", apiKey);
     }
 

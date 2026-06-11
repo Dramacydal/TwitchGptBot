@@ -8,7 +8,8 @@ namespace TwitchGpt.Gpt.Audio;
 
 /// <summary>
 /// Runs streamlink | ffmpeg and splits the audio stream into fixed-length chunks.
-/// Publishes ready file paths to a Channel. Files are deleted by the consumer after processing.
+/// Automatically restarts when the process exits (stream offline or interrupted).
+/// Publishes ready file paths to a Channel.
 /// </summary>
 public sealed class AudioChunkWriter : IAsyncDisposable
 {
@@ -17,6 +18,8 @@ public sealed class AudioChunkWriter : IAsyncDisposable
     private readonly string _outputDir;
     private readonly Channel<string> _channel;
     private readonly FileSystemWatcher _watcher;
+
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
 
     private Process? _process;
     private ChildProcessGuard? _processGuard;
@@ -45,7 +48,7 @@ public sealed class AudioChunkWriter : IAsyncDisposable
 
         Directory.CreateDirectory(_outputDir);
 
-        _watcher = new FileSystemWatcher(_outputDir, "chunk_*.wav")
+        _watcher = new FileSystemWatcher(_outputDir, "chunk_*.mp3")
         {
             NotifyFilter = NotifyFilters.FileName,
             EnableRaisingEvents = false
@@ -53,37 +56,69 @@ public sealed class AudioChunkWriter : IAsyncDisposable
         _watcher.Created += OnFileCreated;
     }
 
-    public Task StartAsync(CancellationToken token)
+    /// <summary>
+    /// Long-running loop: starts the capture pipeline and restarts it whenever the
+    /// stream goes offline or the process exits unexpectedly.
+    /// Completes only when <paramref name="token"/> is cancelled.
+    /// </summary>
+    public async Task RunAsync(CancellationToken token)
     {
-        CleanOutputDir();
-
-        var command = BuildCommand();
-        Logger.Info($"AudioChunkWriter starting: {command}");
-
-        _process = CreateProcess(command);
-
-        _process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Logger.Debug($"[ffmpeg] {e.Data}");
-        };
-
-        if (!_process.Start())
-            throw new Exception("Failed to start ffmpeg audio process");
-
-        // Register with Job Object so the child is killed if our process dies (Windows only)
-        _processGuard = new ChildProcessGuard();
-        _processGuard.AddProcess(_process);
-
-        _process.BeginErrorReadLine();
-        _watcher.EnableRaisingEvents = true;
-
-        token.Register(Stop);
-
-        // Ensure the child process is killed if the parent exits unexpectedly
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
-        return Task.CompletedTask;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                CleanOutputDir();
+                _lastChunkIndex = -1;
+
+                var command = BuildCommand();
+                Logger.Info($"AudioChunkWriter starting: {command}");
+
+                _process = CreateProcess();
+                _processGuard = new ChildProcessGuard();
+
+                _process.ErrorDataReceived += (_, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                        Logger.Debug($"[ffmpeg] {e.Data}");
+                };
+
+                if (!_process.Start())
+                {
+                    Logger.Error("AudioChunkWriter: failed to start process, retrying...");
+                    await WaitBeforeRetry(token);
+                    continue;
+                }
+
+                _processGuard.AddProcess(_process);
+                _process.BeginErrorReadLine();
+                _watcher.EnableRaisingEvents = true;
+
+                await _process.WaitForExitAsync(token).ConfigureAwait(false);
+
+                _watcher.EnableRaisingEvents = false;
+
+                if (token.IsCancellationRequested)
+                    break;
+
+                Logger.Info($"AudioChunkWriter: process exited (stream offline?), retrying in {RetryDelay.TotalSeconds}s");
+                await WaitBeforeRetry(token);
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+            KillProcess();
+            _channel.Writer.TryComplete();
+        }
+    }
+
+    private static async Task WaitBeforeRetry(CancellationToken token)
+    {
+        try { await Task.Delay(RetryDelay, token); }
+        catch (OperationCanceledException) { }
     }
 
     private void OnFileCreated(object sender, FileSystemEventArgs e)
@@ -127,40 +162,38 @@ public sealed class AudioChunkWriter : IAsyncDisposable
         _lastChunkIndex = index.Value;
     }
 
-    private void OnProcessExit(object? sender, EventArgs e) => Stop();
+    private void OnProcessExit(object? sender, EventArgs e) => KillProcess();
 
-    private void Stop()
+    private void KillProcess()
     {
-        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         _watcher.EnableRaisingEvents = false;
-
         try
         {
             if (_process is { HasExited: false })
                 _process.Kill(entireProcessTree: true);
         }
         catch { /* already exited */ }
-
-        if (!_channel.Writer.TryComplete())
-            Logger.Debug("AudioChunkWriter: channel was already completed");
     }
 
     private string BuildCommand()
     {
-        var outputPattern = Path.Combine(_outputDir, "chunk_%05d.wav");
+        var outputPattern = Path.Combine(_outputDir, "chunk_%05d.mp3");
 
-        // -vn          — audio only, drop video
-        // -ac 1        — mono
-        // -ar 16000    — 16 kHz sample rate (optimal for Whisper)
-        // -f segment   — split into fixed-length segments
-        var ffmpegArgs = $"-loglevel error -y -i pipe:0 -vn -ac 1 -ar 16000 -acodec pcm_s16le -f segment -segment_time {_chunkSeconds} -reset_timestamps 1 \"{outputPattern}\"";
+        // -vn             — audio only, drop video
+        // -ac 2           — stereo
+        // -ar 44100       — CD sample rate, preserves full frequency range for music recognition
+        // -acodec mp3     — encode to mp3
+        // -q:a 2          — VBR ~190 kbps, high quality
+        // -f segment      — split into fixed-length segments
+        var ffmpegArgs = $"-loglevel error -y -i pipe:0 -vn -ac 2 -ar 44100 -acodec libmp3lame -q:a 2 -f segment -segment_time {_chunkSeconds} -reset_timestamps 1 \"{outputPattern}\"";
         var streamlinkArgs = $"--twitch-disable-ads https://www.twitch.tv/{_channelName} audio_only -O";
 
         return $"streamlink {streamlinkArgs} | ffmpeg {ffmpegArgs}";
     }
 
-    private Process CreateProcess(string command)
+    private Process CreateProcess()
     {
+        var command = BuildCommand();
         var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         var info = new ProcessStartInfo
         {
@@ -171,20 +204,12 @@ public sealed class AudioChunkWriter : IAsyncDisposable
             RedirectStandardError = true,
         };
 
-        var process = new Process { StartInfo = info, EnableRaisingEvents = true };
-        process.Exited += (_, _) =>
-        {
-            Logger.Info("AudioChunkWriter: ffmpeg process exited");
-            if (!_channel.Writer.TryComplete())
-                Logger.Debug("AudioChunkWriter: channel was already completed");
-        };
-
-        return process;
+        return new Process { StartInfo = info, EnableRaisingEvents = true };
     }
 
     private void CleanOutputDir()
     {
-        foreach (var file in Directory.GetFiles(_outputDir, "chunk_*.wav"))
+        foreach (var file in Directory.GetFiles(_outputDir, "chunk_*.mp3"))
         {
             try { File.Delete(file); }
             catch { /* ignore */ }
@@ -192,7 +217,7 @@ public sealed class AudioChunkWriter : IAsyncDisposable
     }
 
     private string ChunkPath(int index) =>
-        Path.Combine(_outputDir, $"chunk_{index:D5}.wav");
+        Path.Combine(_outputDir, $"chunk_{index:D5}.mp3");
 
     private static int? ParseChunkIndex(string? fileName)
     {
@@ -208,7 +233,7 @@ public sealed class AudioChunkWriter : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Stop();
+        KillProcess();
         _watcher.Dispose();
         _process?.Dispose();
         _processGuard?.Dispose();
