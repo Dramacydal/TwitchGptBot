@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NLog;
 
 namespace TwitchGpt.Gpt.Music;
 
@@ -37,6 +38,7 @@ public class ShazamClient : ITrackRecognizer
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(token);
+        Logger.Debug($"Shazam response: {json}");
         var result = JsonSerializer.Deserialize<RecognizeResponse>(json);
 
         var track = result?.Result?.Track;
@@ -45,6 +47,8 @@ public class ShazamClient : ITrackRecognizer
 
         return new TrackInfo(track.Title ?? "", track.Subtitle ?? "");
     }
+
+    private ILogger Logger => Logging.Logger.Instance(nameof(ShazamClient));
 
     // ── JSON model ──────────────────────────────────────────────────────────────
 

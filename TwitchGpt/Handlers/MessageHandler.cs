@@ -6,6 +6,7 @@ using TwitchGpt.Entities;
 using TwitchGpt.Gpt;
 using TwitchGpt.Gpt.Entities;
 using TwitchGpt.Gpt.Factories;
+using TwitchGpt.Gpt.Music;
 using TwitchLib.Api.Helix.Models.Channels.ModifyChannelInformation;
 using TwitchLib.Api.Helix.Models.Users.GetUsers;
 using TwitchLib.Client.Models;
@@ -416,6 +417,36 @@ public class MessageHandler
                 }
                 break;
             }
+            case "shazam":
+            case "track":
+            case "трек":
+            case "шазам":
+            {
+                if (_trackRecognizer == null)
+                    return;
+
+                var chunks = _streamWatcher.RecentChunkPaths;
+                if (chunks.Count == 0)
+                {
+                    await msg.Respond("Не удалось распознать трек");
+                    return;
+                }
+
+                try
+                {
+                    var track = await _trackRecognizer.RecognizeAsync(chunks[^1]);
+                    if (track == null)
+                        await msg.Respond("Не удалось распознать трек");
+                    else
+                        await msg.Respond($"{track.Artist} - {track.Title}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Shazam recognition error: {ex.Message}");
+                    await msg.Respond("Не удалось распознать трек");
+                }
+                break;
+            }
         }
     }
 
@@ -515,8 +546,12 @@ public class MessageHandler
             _streamWatcher = await StreamWatcher.Create(bot, channelUser),
         };
 
+        var rapidApiKeys = await RapidApiKeyMapper.Instance.GetRapidApiKeyPool();
+        if (rapidApiKeys.Count > 0)
+            instance._trackRecognizer = new ShazamClient(rapidApiKeys[0]);
+
         await instance.LoadGames();
-        
+
         return instance;
     }
 
@@ -619,6 +654,7 @@ public class MessageHandler
     public void SetDialogsEnabled(bool on) => _dialogsEnabled = on;
     
     private StreamWatcher _streamWatcher;
+    private ITrackRecognizer? _trackRecognizer;
 
     public async Task RunAsync(CancellationToken token)
     {

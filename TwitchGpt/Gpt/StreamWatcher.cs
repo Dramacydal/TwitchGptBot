@@ -26,6 +26,8 @@ public class StreamWatcher
     private AudioChunkWriter? _audioChunkWriter;
     private AudioTranscriptionService? _audioTranscriptionService;
 
+    public IReadOnlyList<string> RecentChunkPaths => _audioTranscriptionService?.RecentChunkPaths ?? [];
+
     private readonly Bot _bot;
 
     private readonly User _channelUser;
