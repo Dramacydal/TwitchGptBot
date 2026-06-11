@@ -72,7 +72,7 @@ public class StreamWatcher
         }
 
         var audioClient = new OpenRouterAudioClient(keys[0]);
-        _audioChunkWriter = new AudioChunkWriter(_channelUser.Login, 10);
+        _audioChunkWriter = new AudioChunkWriter(_channelUser.Login, _channelUser.Id, 10);
         _audioTranscriptionService = new AudioTranscriptionService(_audioChunkWriter, audioClient, triggerWords);
         _voiceCommandProcessor = new VoiceCommandProcessor(_audioTranscriptionService, MessagesProcessor);
 

@@ -24,11 +24,11 @@ public sealed class AudioChunkWriter : IAsyncDisposable
 
     public ChannelReader<string> Chunks => _channel.Reader;
 
-    public AudioChunkWriter(string channelName, int chunkSeconds = 5, string? outputDir = null)
+    public AudioChunkWriter(string channelName, string channelId, int chunkSeconds = 5, string? outputDir = null)
     {
         _channelName = channelName;
         _chunkSeconds = chunkSeconds;
-        _outputDir = outputDir ?? Path.Combine(Path.GetTempPath(), "twitchgpt_audio");
+        _outputDir = outputDir ?? Path.Combine(Path.GetTempPath(), $"twitchgpt_audio_{channelId}");
         _channel = Channel.CreateBounded<string>(new BoundedChannelOptions(32)
         {
             FullMode = BoundedChannelFullMode.DropOldest,

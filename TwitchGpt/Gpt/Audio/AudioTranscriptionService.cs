@@ -36,22 +36,32 @@ public sealed class AudioTranscriptionService
 
     public ChannelReader<string> Commands => _commandChannel.Reader;
 
+    /// <summary>Returns paths to the most recently processed chunk files still on disk.</summary>
+    public IReadOnlyList<string> RecentChunkPaths => _chunkFileQueue.ToArray();
+
+    // Rolling queue of processed chunk file paths kept on disk
+    private readonly Queue<string> _chunkFileQueue = new();
+    private readonly int _maxStoredChunks;
+
     /// <param name="chunkWriter">Source of audio chunk file paths</param>
     /// <param name="audioClient">Whisper client for transcription</param>
     /// <param name="triggerWords">Words that indicate the streamer is addressing the bot</param>
-    /// <param name="maxBufferSize">How many chunks to keep in context (default 5 ≈ 25s)</param>
+    /// <param name="maxBufferSize">How many transcriptions to keep in context (default 5 ≈ 25s)</param>
+    /// <param name="maxStoredChunks">How many processed chunk files to keep on disk (default 3)</param>
     /// <param name="cooldown">Minimum time between two consecutive triggers</param>
     public AudioTranscriptionService(
         AudioChunkWriter chunkWriter,
         OpenRouterAudioClient audioClient,
         string[] triggerWords,
         int maxBufferSize = 5,
+        int maxStoredChunks = 3,
         TimeSpan? cooldown = null)
     {
         _chunkWriter = chunkWriter;
         _audioClient = audioClient;
         _triggerWords = triggerWords;
         _maxBufferSize = maxBufferSize;
+        _maxStoredChunks = maxStoredChunks;
         _cooldown = cooldown ?? TimeSpan.FromSeconds(15);
     }
 
@@ -70,9 +80,7 @@ public sealed class AudioTranscriptionService
             catch (Exception ex)
             {
                 Logger.Error($"Transcription error for {chunkPath}: {ex.Message}");
-
-                // Delete the chunk even on error to avoid accumulating stale files
-                TryDeleteFile(chunkPath);
+                RetainChunk(chunkPath);
             }
         }
 
@@ -83,7 +91,7 @@ public sealed class AudioTranscriptionService
     {
         var text = await _audioClient.TranscribeAsync(chunkPath, format: "wav", token: token);
 
-        TryDeleteFile(chunkPath);
+        RetainChunk(chunkPath);
 
         if (string.IsNullOrWhiteSpace(text))
             return;
@@ -135,6 +143,15 @@ public sealed class AudioTranscriptionService
 
     private bool ContainsTrigger(string text) =>
         _triggerWords.Any(w => text.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+    // Keeps the N most recent processed chunks on disk, deletes older ones
+    private void RetainChunk(string path)
+    {
+        _chunkFileQueue.Enqueue(path);
+
+        while (_chunkFileQueue.Count > _maxStoredChunks)
+            TryDeleteFile(_chunkFileQueue.Dequeue());
+    }
 
     private static void TryDeleteFile(string path)
     {
